@@ -1,0 +1,21 @@
+{
+  "name": "brandproof",
+  "version": "1.0.0",
+  "description": "BrandProof — Intelligent Brand-Governance & Content Verification Platform. No citation, no flag.",
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "dev:backend": ".venv\\Scripts\\python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload",
+    "test:backend": ".venv\\Scripts\\python tests/test_engine_unit.py",
+    "seed": ".venv\\Scripts\\python -m backend.seed"
+  },
+  "keywords": [
+    "brand-governance",
+    "compliance",
+    "verification",
+    "evidence-based",
+    "content-audit"
+  ],
+  "author": "BrandProof Engineering",
+  "license": "MIT"
+}

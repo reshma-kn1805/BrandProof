@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #EAF2F3;
+  --bg-surface: #F7FAFA;
+  --sidebar-bg: #172E35;
+  --teal-primary: #328C91;
+  --teal-deep: #205E65;
+  --text-dark: #172C32;
+  --text-secondary: #63777C;
+  --card-bg: #FFFFFF;
+  --border-color: #DCE7E8;
+  --success: #1E7E51;
+  --warning: #B45309;
+  --critical: #B91C1C;
+}
+
+body {
+  background-color: var(--bg-surface);
+  color: var(--text-dark);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #EAF2F3;
+}
+::-webkit-scrollbar-thumb {
+  background: #B9CBD0;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8FAAB1;
+}
+
+/* Precise diff highlightings */
+.diff-del {
+  background-color: #FEE2E2;
+  color: #991B1B;
+  text-decoration: line-through;
+  padding: 0.1rem 0.25rem;
+  border-radius: 0.2rem;
+  font-weight: 500;
+}
+.diff-add {
+  background-color: #DCFCE7;
+  color: #166534;
+  padding: 0.1rem 0.25rem;
+  border-radius: 0.2rem;
+  font-weight: 500;
+}
+
