@@ -4,7 +4,22 @@
 
 BrandProof is an intelligent, evidence-first brand-governance and content compliance verification platform built for Round 2 of the hackathon. It empowers organizations to verify their marketing, packaging, and digital communications against approved brand guidelines, nutritional facts, registered trademarks, claims, and media assets before publication.
 
-Unlike generic AI content tools that hallucinate findings or output unverified advice, BrandProof enforces an **independent verification layer**. Every single issue flagged must be substantiated by an exact active guideline clause or an approved, unexpired fact. If evidence cannot be proven, the engine abstains and routes the content for human review.
+---
+
+## 🚀 Live Access & Deployment Links
+
+| Environment / Service | Link | Access & Status |
+|---|---|---|
+| **GitHub Repository** | [github.com/reshma-kn1805/BrandProof](https://github.com/reshma-kn1805/BrandProof) | Full Source & Commit History |
+| **Local Web Application** | [http://localhost:3000](http://localhost:3000) | Live Next.js 14 Frontend |
+| **Backend REST API** | [http://127.0.0.1:8000](http://127.0.0.1:8000) | Live FastAPI Verification Engine |
+| **Interactive API Documentation** | [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) | Swagger UI (All Endpoints) |
+| **System Health Check** | [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health) | Tenant & Verifier Health Status |
+
+### 1-Click Free Cloud Deployment
+Now that the GitHub repository is populated, you can deploy live with 1 click:
+1. **Frontend (Vercel)**: Import `https://github.com/reshma-kn1805/BrandProof`, select **Root Directory**: `frontend`, and click **Deploy**.
+2. **Backend (Render / Railway)**: Create a Web Service pointing to `https://github.com/reshma-kn1805/BrandProof`, build command: `pip install -r backend/requirements.txt`, start command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`.
 
 ---
 
