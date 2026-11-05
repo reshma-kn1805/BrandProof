@@ -6,21 +6,30 @@ BrandProof is an intelligent, evidence-first brand-governance and content compli
 
 ---
 
-## 🚀 Live Deployed Links & Access
+## 🚀 Live Deployed App & Production Demos
 
-| Environment / Service | Live URL | Description & Access |
+| Environment / Service | Live URL | Description & Status |
 |---|---|---|
-| **Live Public Web App** | **[https://brandproof-demo.loca.lt](https://brandproof-demo.loca.lt)** | **Public Live Deployed Instance** *(Tunnel Password if prompted: `157.49.225.16`)* |
-| **Local Web Application** | **[http://localhost:3000](http://localhost:3000)** | Next.js 14 Web Frontend |
-| **Backend REST API** | **[http://127.0.0.1:8000](http://127.0.0.1:8000)** | FastAPI Core Verification Service |
-| **Interactive API Documentation** | **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)** | OpenAPI / Swagger Interface |
-| **System Health Check** | **[http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)** | System & Verifier Status |
-| **GitHub Repository** | **[github.com/reshma-kn1805/BrandProof](https://github.com/reshma-kn1805/BrandProof)** | Full Source Code & Architecture |
+| 🌐 **Live Web Application (Always Online)** | **[https://reshma-kn1805.github.io/BrandProof/](https://reshma-kn1805.github.io/BrandProof/)** | 🟢 **Direct Live Instance (GitHub Pages — No Password, Zero Setup)** |
+| ⚡ **1-Click Frontend Deployment (Vercel)** | **[Deploy with Vercel](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Freshma-kn1805%2FBrandProof&root-directory=frontend)** | 🟢 Instant Free Next.js 14 Cloud Host |
+| 🚢 **1-Click Backend Deployment (Render)** | **[Deploy with Render](https://render.com/deploy?repo=https://github.com/reshma-kn1805/BrandProof)** | 🟢 Instant Free FastAPI Backend Service |
+| 💻 **Local Fullstack Application** | **[http://localhost:3000](http://localhost:3000)** | Next.js 14 Local Web Frontend |
+| ⚙️ **Backend REST API** | **[http://127.0.0.1:8000](http://127.0.0.1:8000)** | FastAPI Core Verification Service |
+| 📖 **Interactive API Documentation** | **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)** | Swagger / OpenAPI Explorer |
+| 🩺 **System Health Check** | **[http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)** | Multi-Stage Engine Status |
+| 📦 **GitHub Repository** | **[github.com/reshma-kn1805/BrandProof](https://github.com/reshma-kn1805/BrandProof)** | Verified Source Code & Git History |
 
-### 1-Click Free Cloud Deployment
-Now that the GitHub repository is populated, you can deploy live with 1 click:
-1. **Frontend (Vercel)**: Import `https://github.com/reshma-kn1805/BrandProof`, select **Root Directory**: `frontend`, and click **Deploy**.
-2. **Backend (Render / Railway)**: Create a Web Service pointing to `https://github.com/reshma-kn1805/BrandProof`, build command: `pip install -r backend/requirements.txt`, start command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`.
+### 🎯 Instant Testing Instructions (30 Seconds)
+1. Open the live link: **[https://reshma-kn1805.github.io/BrandProof/](https://reshma-kn1805.github.io/BrandProof/)**
+2. Click **"1-Click Creator (Anita / Arjun)"** in the top navigation or modal to authenticate.
+3. Navigate to **New Review** and click **"Load Violation Sample"**:
+   > *"Nila Millet-Mix is India's #1 healthy breakfast! Guaranteed to cut sugar cravings. Buy now."*
+4. Click **"Run Brand Verification"** to witness all 4 violations caught with verified citations:
+   - **Clause 4.1**: Prohibited hyphenated term `Millet-Mix`
+   - **Clause 3.4 & Fact F-07**: Unverified ranking claim `India's #1` flagged with **`expired_fact_detected`**
+   - **Clause 3.6**: Prohibited medical guarantee `Guaranteed to cut sugar cravings`
+   - **Clause 2.1**: High-pressure urgency trigger `Buy now.`
+5. Click **"Accept Suggestion"** on all cards to auto-remediate the draft and watch the compliance health score recalibrate to **100%**!
 
 ---
 

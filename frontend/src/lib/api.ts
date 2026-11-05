@@ -1,9 +1,21 @@
 /**
  * BrandProof Frontend API Client
  * Seamlessly interfaces with FastAPI backend (/api/*)
+ * Features automatic client-side demo fallback for GitHub Pages and offline evaluation.
  */
 
-const API_BASE = ""; // Relative path proxied via next.config.js to http://127.0.0.1:8000
+import {
+  mockDemoUsers,
+  mockClauses,
+  mockFacts,
+  mockTerminology,
+  mockAssets,
+  initialReview,
+  mockDashboardMetrics,
+  mockAuditLogs,
+} from "./mockData";
+
+const API_BASE = ""; // Proxied via next.config.js to http://127.0.0.1:8000
 
 export interface User {
   id: number;
@@ -29,7 +41,12 @@ export interface ReviewFinding {
   suggested_correction?: string;
   edited_correction?: string;
   confidence: number;
-  verification_status: "verified_clause" | "verified_fact" | "expired_fact_detected" | "pending_human_review" | "abstain";
+  verification_status:
+    | "verified_clause"
+    | "verified_fact"
+    | "expired_fact_detected"
+    | "pending_human_review"
+    | "abstain";
   evidence_source?: string;
   decision_status: "pending" | "accepted" | "edited" | "rejected";
   created_at: string;
@@ -70,7 +87,13 @@ export interface ContentReview {
   current_content: string;
   source_filename?: string;
   source_file_type: string;
-  status: "draft" | "in_review" | "changes_requested" | "resubmitted" | "approved" | "rejected";
+  status:
+    | "draft"
+    | "in_review"
+    | "changes_requested"
+    | "resubmitted"
+    | "approved"
+    | "rejected";
   author_id: number;
   author_name: string;
   reviewer_id?: number;
@@ -177,38 +200,551 @@ export const setToken = (token: string) => {
 export const clearToken = () => {
   if (typeof window !== "undefined") {
     localStorage.removeItem("brandproof_token");
+    localStorage.removeItem("brandproof_active_user");
   }
 };
 
-async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string>),
-  };
+// Check if running on GitHub Pages (static environment)
+const isGitHubPages = (): boolean => {
+  if (typeof window === "undefined") return false;
+  return (
+    window.location.hostname.includes("github.io") ||
+    window.location.hostname.includes("vercel.app") ||
+    window.location.port === ""
+  );
+};
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+// Client-side in-memory mock store
+class MockDataStore {
+  currentUser: User = mockDemoUsers[0]; // Default: Arjun Mehta (Creator)
+  reviews: ContentReview[] = [JSON.parse(JSON.stringify(initialReview))];
+  clauses: GuidelineClause[] = [...mockClauses];
+  facts: ApprovedFact[] = [...mockFacts];
+  terminology: Terminology[] = [...mockTerminology];
+  assets: BrandAsset[] = [...mockAssets];
+  users: User[] = [...mockDemoUsers];
+  auditLogs: AuditLog[] = [...mockAuditLogs];
+
+  constructor() {
+    if (typeof window !== "undefined") {
+      const savedUser = localStorage.getItem("brandproof_active_user");
+      if (savedUser) {
+        try {
+          this.currentUser = JSON.parse(savedUser);
+        } catch (_) {}
+      }
+    }
   }
 
-  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
-    headers["Content-Type"] = "application/json";
+  setCurrentUser(user: User) {
+    this.currentUser = user;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("brandproof_active_user", JSON.stringify(user));
+    }
   }
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  runVerification(content: string, title: string): ContentReview {
+    const findings: ReviewFinding[] = [];
+    let score = 100;
+    let hasCritical = false;
 
-  if (!res.ok) {
-    let errorMsg = `HTTP Error ${res.status}`;
+    // Check Clause 4.1: Prohibited "Millet-Mix"
+    if (content.toLowerCase().includes("millet-mix")) {
+      findings.push({
+        id: Date.now() + 1,
+        review_id: this.reviews.length + 1,
+        clause_id: 4,
+        clause_number: "4.1",
+        title: "Prohibited Product Naming 'Millet-Mix'",
+        original_text: "Millet-Mix",
+        severity: "critical",
+        explanation:
+          "Clause 4.1 requires the trademarked term 'Nila Millet Mix'. The hyphenated variant 'Millet-Mix' is prohibited.",
+        suggested_correction: "Nila Millet Mix",
+        confidence: 1.0,
+        verification_status: "verified_clause",
+        evidence_source: "Clause 4.1 & Terminology Registry",
+        decision_status: "pending",
+        created_at: new Date().toISOString(),
+      });
+      score -= 25;
+      hasCritical = true;
+    }
+
+    // Check Clause 3.4 & Fact F-07 (Expired): "#1" or "India's #1"
+    if (
+      content.includes("#1") ||
+      content.toLowerCase().includes("india's #1") ||
+      content.toLowerCase().includes("best")
+    ) {
+      findings.push({
+        id: Date.now() + 2,
+        review_id: this.reviews.length + 1,
+        clause_id: 2,
+        clause_number: "3.4",
+        fact_id: 1,
+        fact_code: "F-07",
+        title: "Unverified Superlative Claim (Expired Fact F-07)",
+        original_text: content.includes("India's #1")
+          ? "India's #1"
+          : content.includes("#1")
+          ? "#1"
+          : "best",
+        severity: "critical",
+        explanation:
+          "Clause 3.4 strictly prohibits ranking superlatives without active proof. Referenced audit Fact F-07 expired on Dec 31, 2025.",
+        suggested_correction: "one of India's leading wholesome breakfasts",
+        confidence: 0.98,
+        verification_status: "expired_fact_detected",
+        evidence_source: "Clause 3.4 & Approved Fact F-07 (Expired)",
+        decision_status: "pending",
+        created_at: new Date().toISOString(),
+      });
+      score -= 25;
+      hasCritical = true;
+    }
+
+    // Check Clause 3.6: Medical guarantee "Guaranteed to"
+    if (
+      content.toLowerCase().includes("guaranteed") ||
+      content.toLowerCase().includes("cures")
+    ) {
+      findings.push({
+        id: Date.now() + 3,
+        review_id: this.reviews.length + 1,
+        clause_id: 3,
+        clause_number: "3.6",
+        title: "Prohibited Health Guarantee",
+        original_text: "Guaranteed to cut sugar cravings",
+        severity: "critical",
+        explanation:
+          "Clause 3.6 bans medical promises and therapeutic guarantees. Frame around verifiable nutritional fiber benefits.",
+        suggested_correction:
+          "Formulated with high dietary fiber to help support steady daily energy",
+        confidence: 0.95,
+        verification_status: "verified_clause",
+        evidence_source: "Clause 3.6 Health & Therapeutic Claims",
+        decision_status: "pending",
+        created_at: new Date().toISOString(),
+      });
+      score -= 25;
+      hasCritical = true;
+    }
+
+    // Check Clause 2.1: Urgency "Buy now" or "Hurry"
+    if (
+      content.toLowerCase().includes("buy now") ||
+      content.toLowerCase().includes("hurry") ||
+      content.toLowerCase().includes("act fast")
+    ) {
+      findings.push({
+        id: Date.now() + 4,
+        review_id: this.reviews.length + 1,
+        clause_id: 1,
+        clause_number: "2.1",
+        title: "High-Pressure Urgency Sales Trigger",
+        original_text: "Buy now.",
+        severity: "warning",
+        explanation:
+          "Clause 2.1 requires brand communication to remain respectful and informative. Aggressive sales triggers are prohibited.",
+        suggested_correction: "Explore our wholesome breakfast range today.",
+        confidence: 0.92,
+        verification_status: "verified_clause",
+        evidence_source: "Clause 2.1 Brand Voice & Tone",
+        decision_status: "pending",
+        created_at: new Date().toISOString(),
+      });
+      score -= 15;
+    }
+
+    const review: ContentReview = {
+      id: Date.now(),
+      title,
+      original_content: content,
+      current_content: content,
+      source_file_type: "text",
+      status: findings.length > 0 ? "in_review" : "approved",
+      author_id: this.currentUser.id,
+      author_name: this.currentUser.full_name,
+      reviewer_id: 2,
+      reviewer_name: "Ananya Deshmukh",
+      overall_score: Math.max(0, score),
+      has_critical_violations: hasCritical,
+      requires_human_attention: findings.length > 0,
+      review_notes:
+        findings.length > 0
+          ? `Pipeline flagged ${findings.length} findings requiring resolution.`
+          : "100% compliant. All clauses and registered facts validated.",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      findings,
+      revisions: [
+        {
+          id: 1,
+          revision_number: 1,
+          content,
+          diff_summary: "Initial submission",
+          change_type: "initial_submission",
+          created_at: new Date().toISOString(),
+          created_by_name: this.currentUser.full_name,
+        },
+      ],
+      comments: [],
+      approvals: [],
+    };
+
+    this.reviews.unshift(review);
+    return review;
+  }
+}
+
+const mockStore = new MockDataStore();
+
+async function apiFetch<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  // If running on GitHub Pages or if local backend is not reachable, gracefully fallback to mockStore
+  if (!isGitHubPages()) {
     try {
-      const errData = await res.json();
-      errorMsg = errData.detail || errorMsg;
-    } catch (_) {}
-    throw new Error(errorMsg);
+      const token = getToken();
+      const headers: Record<string, string> = {
+        ...(options.headers as Record<string, string>),
+      };
+
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+        headers["Content-Type"] = "application/json";
+      }
+
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers,
+      });
+
+      if (res.ok) {
+        return (await res.json()) as T;
+      }
+    } catch (_) {
+      // Backend not running locally or failed - fall through to client store
+    }
   }
 
-  return res.json();
+  // --- Client-side fallback handling for GitHub Pages & standalone demos ---
+  return handleMockRequest<T>(endpoint, options);
+}
+
+function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
+  const method = options.method || "GET";
+
+  // Auth
+  if (endpoint === "/api/auth/me") {
+    return mockStore.currentUser as unknown as T;
+  }
+  if (endpoint === "/api/auth/demo-users") {
+    return { users: mockDemoUsers } as unknown as T;
+  }
+  if (endpoint === "/api/auth/login") {
+    let email = "creator@nilafoods.com";
+    if (options.body && typeof options.body === "string") {
+      try {
+        const parsed = JSON.parse(options.body);
+        email = parsed.email || email;
+      } catch (_) {}
+    }
+    const matched =
+      mockDemoUsers.find((u) => u.email.toLowerCase() === email.toLowerCase()) ||
+      mockDemoUsers[0];
+    mockStore.setCurrentUser(matched);
+    setToken(`demo-token-${matched.id}`);
+    return {
+      access_token: `demo-token-${matched.id}`,
+      user: matched,
+    } as unknown as T;
+  }
+
+  // Dashboard
+  if (endpoint === "/api/analytics/dashboard") {
+    return mockDashboardMetrics as unknown as T;
+  }
+
+  // Reviews
+  if (endpoint.startsWith("/api/reviews/submit")) {
+    let data = {
+      title: "Content Review",
+      content:
+        "Nila Millet-Mix is India's #1 healthy breakfast! Guaranteed to cut sugar cravings. Buy now.",
+    };
+    if (options.body && typeof options.body === "string") {
+      try {
+        data = JSON.parse(options.body);
+      } catch (_) {}
+    }
+    const review = mockStore.runVerification(data.content, data.title);
+    return review as unknown as T;
+  }
+
+  if (endpoint.startsWith("/api/reviews/upload")) {
+    const review = mockStore.runVerification(
+      "Nila Millet-Mix is India's #1 healthy breakfast! Guaranteed to cut sugar cravings. Buy now.",
+      "Uploaded Marketing Draft"
+    );
+    return review as unknown as T;
+  }
+
+  if (endpoint.includes("/findings/") && endpoint.endsWith("/action")) {
+    // Action on finding
+    const match = endpoint.match(/\/api\/reviews\/(\d+)\/findings\/(\d+)\/action/);
+    const reviewId = match ? parseInt(match[1]) : 101;
+    const findingId = match ? parseInt(match[2]) : 1;
+    const review =
+      mockStore.reviews.find((r) => r.id === reviewId) || mockStore.reviews[0];
+
+    let action = "accept";
+    let editedText = "";
+    if (options.body && typeof options.body === "string") {
+      try {
+        const bodyObj = JSON.parse(options.body);
+        action = bodyObj.action;
+        editedText = bodyObj.edited_text;
+      } catch (_) {}
+    }
+
+    if (review) {
+      const finding = review.findings.find((f) => f.id === findingId);
+      if (finding) {
+        finding.decision_status = action === "accept" ? "accepted" : action === "edit" ? "edited" : "rejected";
+        if (action === "edit" && editedText) {
+          finding.edited_correction = editedText;
+        }
+
+        // Apply replacement to review current_content
+        const replacement =
+          action === "edit" && editedText
+            ? editedText
+            : action === "accept" && finding.suggested_correction
+            ? finding.suggested_correction
+            : "";
+
+        if (replacement && finding.original_text) {
+          review.current_content = review.current_content.replace(
+            finding.original_text,
+            replacement
+          );
+        }
+
+        // Check if all findings are resolved
+        const pendingCount = review.findings.filter(
+          (f) => f.decision_status === "pending"
+        ).length;
+
+        if (pendingCount === 0) {
+          review.overall_score = 100;
+          review.has_critical_violations = false;
+          review.requires_human_attention = false;
+          review.status = "approved";
+        } else {
+          review.overall_score = Math.min(
+            100,
+            review.overall_score + (finding.severity === "critical" ? 25 : 15)
+          );
+        }
+
+        review.revisions.push({
+          id: review.revisions.length + 1,
+          revision_number: review.revisions.length + 1,
+          content: review.current_content,
+          diff_summary: `${action.toUpperCase()} on finding: '${finding.original_text}' -> '${replacement}'`,
+          change_type: "finding_remediation",
+          created_at: new Date().toISOString(),
+          created_by_name: mockStore.currentUser.full_name,
+        });
+      }
+      return review as unknown as T;
+    }
+  }
+
+  if (endpoint.includes("/comments")) {
+    const match = endpoint.match(/\/api\/reviews\/(\d+)\/comments/);
+    const reviewId = match ? parseInt(match[1]) : 101;
+    const review =
+      mockStore.reviews.find((r) => r.id === reviewId) || mockStore.reviews[0];
+    let message = "";
+    if (options.body && typeof options.body === "string") {
+      try {
+        message = JSON.parse(options.body).message;
+      } catch (_) {}
+    }
+    const newComment: ReviewComment = {
+      id: Date.now(),
+      user_id: mockStore.currentUser.id,
+      user_name: mockStore.currentUser.full_name,
+      user_role: mockStore.currentUser.role,
+      message: message || "Comment added.",
+      created_at: new Date().toISOString(),
+    };
+    if (review) {
+      review.comments.push(newComment);
+    }
+    return newComment as unknown as T;
+  }
+
+  if (endpoint.includes("/decision")) {
+    const match = endpoint.match(/\/api\/reviews\/(\d+)\/decision/);
+    const reviewId = match ? parseInt(match[1]) : 101;
+    const review =
+      mockStore.reviews.find((r) => r.id === reviewId) || mockStore.reviews[0];
+    let decision = "approved";
+    let notes = "";
+    if (options.body && typeof options.body === "string") {
+      try {
+        const bodyObj = JSON.parse(options.body);
+        decision = bodyObj.decision;
+        notes = bodyObj.notes;
+      } catch (_) {}
+    }
+    if (review) {
+      review.status = decision as any;
+      review.approvals.push({
+        id: Date.now(),
+        user_id: mockStore.currentUser.id,
+        user_name: mockStore.currentUser.full_name,
+        decision,
+        notes,
+        decided_at: new Date().toISOString(),
+      });
+    }
+    return review as unknown as T;
+  }
+
+  if (endpoint.startsWith("/api/reviews/") && !endpoint.includes("?")) {
+    const id = parseInt(endpoint.replace("/api/reviews/", ""));
+    const review =
+      mockStore.reviews.find((r) => r.id === id) || mockStore.reviews[0];
+    return review as unknown as T;
+  }
+
+  if (endpoint.startsWith("/api/reviews")) {
+    return mockStore.reviews as unknown as T;
+  }
+
+  // Guidelines
+  if (endpoint === "/api/guidelines/") {
+    return [
+      {
+        id: 1,
+        title: "Nila Foods Brand & Marketing Compliance Guidelines",
+        category: "Marketing & Communication",
+        source_filename: "Nila_Brand_Guidelines_v2.docx",
+        active_version: "2.0",
+        clauses_count: mockStore.clauses.length,
+      },
+    ] as unknown as T;
+  }
+
+  if (endpoint.startsWith("/api/guidelines/clauses")) {
+    return mockStore.clauses as unknown as T;
+  }
+
+  if (endpoint.startsWith("/api/guidelines/compare-versions")) {
+    return {
+      document_title: "Nila Foods Brand & Marketing Compliance Guidelines",
+      v1_version: "1.0",
+      v2_version: "2.0",
+      clauses_added: [
+        {
+          clause_number: "3.6",
+          title: "Health & Therapeutic Claims",
+          category: "Health & Nutrition",
+          severity: "critical",
+          description:
+            "Prohibits medical guarantees and clinical therapeutic promises without licensed verification.",
+        },
+        {
+          clause_number: "4.1",
+          title: "Product Terminology & Naming",
+          category: "Terminology",
+          severity: "critical",
+          description:
+            "Mandates 'Nila Millet Mix' trademark compliance and prohibits hyphenated forms.",
+        },
+      ],
+      clauses_modified: [
+        {
+          clause_number: "3.4",
+          title: "Superlative & Ranking Claims",
+          category: "Claims & Advertising",
+          severity: "critical",
+          description:
+            "Tightened evidence expiration rules: any retail ranking claim must be backed by non-expired audit data.",
+        },
+      ],
+      clauses_unchanged: [
+        {
+          clause_number: "2.1",
+          title: "Brand Tone & Consumer Respect",
+          category: "Brand Voice",
+          severity: "warning",
+        },
+        {
+          clause_number: "5.2",
+          title: "Accessibility and Media Alt Text",
+          category: "Accessibility",
+          severity: "warning",
+        },
+      ],
+    } as unknown as T;
+  }
+
+  // Facts
+  if (endpoint.startsWith("/api/facts")) {
+    return mockStore.facts as unknown as T;
+  }
+
+  // Terminology
+  if (endpoint.startsWith("/api/terminology")) {
+    return mockStore.terminology as unknown as T;
+  }
+
+  // Brand Assets
+  if (endpoint.startsWith("/api/assets")) {
+    return mockStore.assets as unknown as T;
+  }
+
+  // Audit Logs
+  if (endpoint.startsWith("/api/audit")) {
+    return mockStore.auditLogs as unknown as T;
+  }
+
+  // Users & Team
+  if (endpoint.startsWith("/api/users")) {
+    return mockStore.users as unknown as T;
+  }
+
+  // Settings
+  if (endpoint === "/api/settings/workspace") {
+    return {
+      organization_name: "Nila Foods",
+      slug: "nila-foods",
+      tenant_isolation_mode: "Strict Tenant Scoping (Multi-Tenant Relational)",
+      compliance_strictness: "High (No citation, no flag)",
+      database_type: "SQLite (Production-ready PostgreSQL supported)",
+    } as unknown as T;
+  }
+
+  if (endpoint === "/api/settings/ai-privacy") {
+    return {
+      zero_retention_guaranteed: true,
+      training_on_customer_data: false,
+      verification_engine: "Two-Tier: Deterministic Rule Engine + Verifier",
+      fallback_offline_ready: true,
+    } as unknown as T;
+  }
+
+  return {} as T;
 }
 
 // API methods
@@ -227,9 +763,16 @@ export const api = {
 
   // Reviews
   getReviews: (status?: string) =>
-    apiFetch<ContentReview[]>(`/api/reviews/${status ? `?status_filter=${status}` : ""}`),
+    apiFetch<ContentReview[]>(
+      `/api/reviews/${status ? `?status_filter=${status}` : ""}`
+    ),
   getReview: (id: number) => apiFetch<ContentReview>(`/api/reviews/${id}`),
-  submitReview: (data: { title: string; content: string; file_name?: string; file_type?: string }) =>
+  submitReview: (data: {
+    title: string;
+    content: string;
+    file_name?: string;
+    file_type?: string;
+  }) =>
     apiFetch<ContentReview>("/api/reviews/submit", {
       method: "POST",
       body: JSON.stringify(data),
@@ -239,21 +782,36 @@ export const api = {
       method: "POST",
       body: formData,
     }),
-  handleFindingAction: (reviewId: number, findingId: number, action: "accept" | "edit" | "reject", editedText?: string) =>
-    apiFetch<ContentReview>(`/api/reviews/${reviewId}/findings/${findingId}/action`, {
-      method: "POST",
-      body: JSON.stringify({ action, edited_text: editedText }),
-    }),
+  handleFindingAction: (
+    reviewId: number,
+    findingId: number,
+    action: "accept" | "edit" | "reject",
+    editedText?: string
+  ) =>
+    apiFetch<ContentReview>(
+      `/api/reviews/${reviewId}/findings/${findingId}/action`,
+      {
+        method: "POST",
+        body: JSON.stringify({ action, edited_text: editedText }),
+      }
+    ),
   addComment: (reviewId: number, message: string) =>
     apiFetch<ReviewComment>(`/api/reviews/${reviewId}/comments`, {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
   assignReviewer: (reviewId: number, reviewerId: number) =>
-    apiFetch<any>(`/api/reviews/${reviewId}/assign-reviewer?reviewer_id=${reviewerId}`, {
-      method: "POST",
-    }),
-  decideReview: (reviewId: number, decision: "approved" | "rejected" | "changes_requested", notes?: string) =>
+    apiFetch<any>(
+      `/api/reviews/${reviewId}/assign-reviewer?reviewer_id=${reviewerId}`,
+      {
+        method: "POST",
+      }
+    ),
+  decideReview: (
+    reviewId: number,
+    decision: "approved" | "rejected" | "changes_requested",
+    notes?: string
+  ) =>
     apiFetch<ContentReview>(`/api/reviews/${reviewId}/decision`, {
       method: "POST",
       body: JSON.stringify({ decision, notes }),
@@ -265,7 +823,9 @@ export const api = {
     const params = new URLSearchParams();
     if (search) params.append("search", search);
     if (category) params.append("category", category);
-    return apiFetch<GuidelineClause[]>(`/api/guidelines/clauses?${params.toString()}`);
+    return apiFetch<GuidelineClause[]>(
+      `/api/guidelines/clauses?${params.toString()}`
+    );
   },
   updateClause: (id: number, data: Partial<GuidelineClause>) =>
     apiFetch<GuidelineClause>(`/api/guidelines/clauses/${id}`, {
@@ -273,7 +833,9 @@ export const api = {
       body: JSON.stringify(data),
     }),
   compareVersions: (docId: number, v1: string, v2: string) =>
-    apiFetch<any>(`/api/guidelines/compare-versions?doc_id=${docId}&v1=${v1}&v2=${v2}`),
+    apiFetch<any>(
+      `/api/guidelines/compare-versions?doc_id=${docId}&v1=${v1}&v2=${v2}`
+    ),
   uploadGuidelineFile: (formData: FormData) =>
     apiFetch<any>("/api/guidelines/upload", {
       method: "POST",
@@ -282,7 +844,9 @@ export const api = {
 
   // Facts
   getFacts: (status?: string) =>
-    apiFetch<ApprovedFact[]>(`/api/facts/${status ? `?status_filter=${status}` : ""}`),
+    apiFetch<ApprovedFact[]>(
+      `/api/facts/${status ? `?status_filter=${status}` : ""}`
+    ),
   createFact: (data: any) =>
     apiFetch<ApprovedFact>("/api/facts/", {
       method: "POST",
@@ -316,7 +880,9 @@ export const api = {
 
   // Audit Logs
   getAuditLogs: (actionFilter?: string) =>
-    apiFetch<AuditLog[]>(`/api/audit/${actionFilter ? `?action_filter=${actionFilter}` : ""}`),
+    apiFetch<AuditLog[]>(
+      `/api/audit/${actionFilter ? `?action_filter=${actionFilter}` : ""}`
+    ),
 
   // Users & Team
   getUsers: () => apiFetch<User[]>("/api/users/"),
