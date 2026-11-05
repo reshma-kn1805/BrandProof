@@ -6,15 +6,16 @@ BrandProof is an intelligent, evidence-first brand-governance and content compli
 
 ---
 
-## 🚀 Live Access & Deployment Links
+## 🚀 Live Deployed Links & Access
 
-| Environment / Service | Link | Access & Status |
+| Environment / Service | Live URL | Description & Access |
 |---|---|---|
-| **GitHub Repository** | [github.com/reshma-kn1805/BrandProof](https://github.com/reshma-kn1805/BrandProof) | Full Source & Commit History |
-| **Local Web Application** | [http://localhost:3000](http://localhost:3000) | Live Next.js 14 Frontend |
-| **Backend REST API** | [http://127.0.0.1:8000](http://127.0.0.1:8000) | Live FastAPI Verification Engine |
-| **Interactive API Documentation** | [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) | Swagger UI (All Endpoints) |
-| **System Health Check** | [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health) | Tenant & Verifier Health Status |
+| **Live Public Web App** | **[https://brandproof-demo.loca.lt](https://brandproof-demo.loca.lt)** | **Public Live Deployed Instance** *(Tunnel Password if prompted: `157.49.225.16`)* |
+| **Local Web Application** | **[http://localhost:3000](http://localhost:3000)** | Next.js 14 Web Frontend |
+| **Backend REST API** | **[http://127.0.0.1:8000](http://127.0.0.1:8000)** | FastAPI Core Verification Service |
+| **Interactive API Documentation** | **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)** | OpenAPI / Swagger Interface |
+| **System Health Check** | **[http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)** | System & Verifier Status |
+| **GitHub Repository** | **[github.com/reshma-kn1805/BrandProof](https://github.com/reshma-kn1805/BrandProof)** | Full Source Code & Architecture |
 
 ### 1-Click Free Cloud Deployment
 Now that the GitHub repository is populated, you can deploy live with 1 click:
