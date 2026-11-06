@@ -378,15 +378,16 @@ Stage 6: Health Scoring & Human Routing (Score computed, Creator self-approval b
 
 ## 10. Commit History & Repository Statistics
 
-- **Total Commits**: **4 commits**
+- **Total Commits**: **5 commits**
 - **First Commit**:
   - **Hash**: `6b2e75f`
   - **Date**: `2026-11-04 16:35:44 +0530`
   - **Subject**: `feat: complete BrandProof brand-governance & verification platform`
-- **Last Commit**:
+- **Last Commit (Prior to documentation commit)**:
   - **Hash**: `5209e4a`
   - **Date**: `2026-11-05 19:21:06 +0530`
   - **Subject**: `feat: add GitHub Pages live deployment, demo engine, and 1-click cloud guides`
 - **Intermediate Commits**:
   - `41268a3` (`2026-11-05 17:42:59 +0530`): `docs: add live links, API documentation URLs, and cloud deployment guides`
   - `776a372` (`2026-11-05 17:58:33 +0530`): `feat: add live public deployed link https://brandproof-demo.loca.lt into repository`
+  - `0971c82` (`2026-11-06 11:22:11 +0530`): `docs: add strictly factual Round 2 platform report docs/ROUND2_FACTS.md`
