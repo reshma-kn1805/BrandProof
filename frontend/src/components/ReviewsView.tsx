@@ -128,7 +128,7 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#DCE7E8]">
-                {filteredReviews.map((r) => (
+                {(filteredReviews ?? []).map((r) => (
                   <tr
                     key={r.id}
                     onClick={() => onSelectReview(r.id)}
@@ -138,7 +138,7 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
                       <div className="flex flex-col">
                         <span className="font-semibold text-[#172C32]">{r.title}</span>
                         <span className="text-[11px] text-[#63777C] font-mono mt-0.5">
-                          {r.source_filename || "direct_input.txt"} • {r.source_file_type.toUpperCase()}
+                          {r.source_filename || "direct_input.txt"} • {(r.source_file_type ?? "text").toUpperCase()}
                         </span>
                       </div>
                     </td>
@@ -174,7 +174,7 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
                             : "bg-[#EAF2F3] text-[#205E65]"
                         }`}
                       >
-                        {r.status.replace("_", " ")}
+                        {(r.status ?? "in_review").replace(/_/g, " ")}
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-[#172C32] font-medium">{r.author_name}</td>

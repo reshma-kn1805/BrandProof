@@ -183,13 +183,13 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                     : "bg-[#EAF2F3] text-[#205E65]"
                 }`}
               >
-                {review.status.replace("_", " ")}
+                {(review.status ?? "in_review").replace(/_/g, " ")}
               </span>
             </div>
             <p className="text-xs text-[#63777C] mt-0.5">
               Author: <strong className="text-[#172C32]">{review.author_name}</strong> • Source:{" "}
               <span className="font-mono">{review.source_filename || "direct_input.txt"}</span> • Revisions:{" "}
-              {review.revisions.length}
+              {(review.revisions ?? []).length}
             </p>
           </div>
         </div>
@@ -264,7 +264,7 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                 </h3>
               </div>
               <div className="flex items-center gap-1">
-                {review.revisions.map((rev, idx) => (
+                {(review.revisions ?? []).map((rev, idx) => (
                   <button
                     key={rev.id}
                     onClick={() => setSelectedRevisionIndex(idx)}
@@ -315,7 +315,7 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                     No comments yet. Start a discussion with the author or reviewer.
                   </p>
                 ) : (
-                  review.comments.map((comm) => (
+                  (review.comments ?? []).map((comm) => (
                     <div
                       key={comm.id}
                       className="p-3 rounded-md bg-[#F7FAFA] border border-[#DCE7E8] text-xs space-y-1"
@@ -365,13 +365,13 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
             <h3 className="text-sm font-bold text-[#172C32] flex items-center gap-1.5">
               <span>Verified Governance Findings</span>
               <span className="w-5 h-5 rounded-full bg-[#328C91] text-white text-[11px] font-bold flex items-center justify-center">
-                {review.findings.length}
+                {(review.findings ?? []).length}
               </span>
             </h3>
             <span className="text-[11px] font-mono text-[#63777C]">No citation, no flag.</span>
           </div>
 
-          {review.findings.length === 0 ? (
+          {(review.findings ?? []).length === 0 ? (
             <div className="p-8 bg-white border border-[#DCE7E8] rounded-lg text-center shadow-subtle space-y-2">
               <CheckCircle2 className="w-8 h-8 text-[#1E7E51] mx-auto" />
               <h4 className="text-sm font-bold text-[#172C32]">Zero Violations Detected</h4>
@@ -380,7 +380,7 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
               </p>
             </div>
           ) : (
-            review.findings.map((finding) => {
+            (review.findings ?? []).map((finding) => {
               const isExpired = finding.verification_status === "expired_fact_detected";
               const isPending = finding.decision_status === "pending";
 
@@ -420,7 +420,7 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                             : "bg-[#205E65] text-white"
                         }`}
                       >
-                        {finding.verification_status.replace(/_/g, " ").toUpperCase()}
+                        {(finding.verification_status ?? "verified_clause").replace(/_/g, " ").toUpperCase()}
                       </span>
                     </div>
 
@@ -562,7 +562,7 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
           <div className="bg-white rounded-lg shadow-elevated border border-[#DCE7E8] max-w-md w-full p-6 space-y-4">
             <h3 className="text-sm font-bold text-[#172C32]">
               Record Decision:{" "}
-              <span className="uppercase text-[#328C91]">{decisionModal.replace("_", " ")}</span>
+              <span className="uppercase text-[#328C91]">{(decisionModal ?? "").replace(/_/g, " ")}</span>
             </h3>
             <p className="text-xs text-[#63777C]">
               Provide reviewer notes or publication clearance remarks for the persistent audit trail.

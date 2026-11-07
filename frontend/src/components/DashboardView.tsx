@@ -160,12 +160,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="divide-y divide-[#DCE7E8]">
-            {data.pending_approvals.length === 0 ? (
+            {(data.pending_approvals ?? []).length === 0 ? (
               <div className="p-8 text-center text-xs text-[#63777C]">
                 No pending submissions in queue. All reviews up to date.
               </div>
             ) : (
-              data.pending_approvals.map((item) => (
+              (data.pending_approvals ?? []).map((item) => (
                 <div
                   key={item.id}
                   onClick={() => onSelectReview(item.id)}
@@ -176,7 +176,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div className="flex items-center gap-2 mt-1 text-[11px] text-[#63777C]">
                       <span>Author: {item.author}</span>
                       <span>•</span>
-                      <span>{item.date}</span>
+                      <span>{item.date || item.submitted || "Today"}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -192,7 +192,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       Score: {item.score}%
                     </span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#EAF2F3] text-[#205E65] uppercase font-semibold">
-                      {item.status.replace("_", " ")}
+                      {(item.status ?? "in_review").replace(/_/g, " ")}
                     </span>
                   </div>
                 </div>
@@ -212,10 +212,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="p-4 flex-1 space-y-3">
-            {data.frequently_triggered_clauses.length === 0 ? (
+            {(data.frequently_triggered_clauses ?? []).length === 0 ? (
               <div className="p-4 text-center text-xs text-[#63777C]">No clauses triggered yet.</div>
             ) : (
-              data.frequently_triggered_clauses.map((c, i) => (
+              (data.frequently_triggered_clauses ?? []).map((c, i) => (
                 <div
                   key={c.clause_number}
                   className="p-2.5 rounded border border-[#DCE7E8] bg-[#F7FAFA] flex items-center justify-between"
@@ -249,7 +249,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <span className="text-[11px] text-[#63777C]">Immutable audit log</span>
         </div>
         <div className="divide-y divide-[#DCE7E8]">
-          {data.recent_activity.map((log) => (
+          {(data.recent_activity ?? []).map((log) => (
             <div key={log.id} className="p-3.5 flex items-center justify-between text-xs">
               <div className="flex items-center gap-3">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#328C91]"></span>

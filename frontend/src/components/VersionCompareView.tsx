@@ -75,7 +75,7 @@ export const VersionCompareView: React.FC<VersionCompareViewProps> = ({ onBack }
           </div>
 
           <div className="divide-y divide-[#DCE7E8]">
-            {data.diffs.map((d: any, idx: number) => (
+            {(data?.diffs ?? []).map((d: any, idx: number) => (
               <div key={idx} className="p-5 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[#205E65] text-white">

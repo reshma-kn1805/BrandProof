@@ -202,6 +202,8 @@ async def handle_finding_action(
     else:
         raise HTTPException(status_code=400, detail="Invalid action. Must be accept, edit, or reject.")
 
+    db.flush()
+
     # If text changed, update content, create new revision, and re-review
     if replacement_text and finding.original_text in review.current_content:
         # Perform replacement

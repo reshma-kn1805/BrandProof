@@ -267,7 +267,7 @@ class MockDataStore {
         decision_status: "pending",
         created_at: new Date().toISOString(),
       });
-      score -= 25;
+      score -= 22;
       hasCritical = true;
     }
 
@@ -300,7 +300,7 @@ class MockDataStore {
         decision_status: "pending",
         created_at: new Date().toISOString(),
       });
-      score -= 25;
+      score -= 22;
       hasCritical = true;
     }
 
@@ -327,7 +327,7 @@ class MockDataStore {
         decision_status: "pending",
         created_at: new Date().toISOString(),
       });
-      score -= 25;
+      score -= 22;
       hasCritical = true;
     }
 
@@ -354,7 +354,7 @@ class MockDataStore {
         decision_status: "pending",
         created_at: new Date().toISOString(),
       });
-      score -= 15;
+      score -= 12;
     }
 
     const review: ContentReview = {
@@ -545,13 +545,24 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
           review.overall_score = 100;
           review.has_critical_violations = false;
           review.requires_human_attention = false;
-          review.status = "approved";
         } else {
           review.overall_score = Math.min(
             100,
-            review.overall_score + (finding.severity === "critical" ? 25 : 15)
+            review.overall_score + (finding.severity === "critical" ? 22 : 12)
           );
         }
+
+        mockStore.auditLogs.unshift({
+          id: Date.now(),
+          user_name: mockStore.currentUser.full_name,
+          user_email: mockStore.currentUser.email,
+          action: `FINDING_${action.toUpperCase()}`,
+          target_type: "ReviewFinding",
+          target_id: finding.id,
+          details: { action, original_text: finding.original_text, replacement },
+          ip_address: "127.0.0.1",
+          created_at: new Date().toISOString(),
+        });
 
         review.revisions.push({
           id: review.revisions.length + 1,
@@ -616,6 +627,17 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
         notes,
         decided_at: new Date().toISOString(),
       });
+      mockStore.auditLogs.unshift({
+        id: Date.now(),
+        user_name: mockStore.currentUser.full_name,
+        user_email: mockStore.currentUser.email,
+        action: `REVIEW_${decision.toUpperCase()}`,
+        target_type: "ContentReview",
+        target_id: review.id,
+        details: { decision, notes },
+        ip_address: "127.0.0.1",
+        created_at: new Date().toISOString(),
+      });
     }
     return review as unknown as T;
   }
@@ -652,48 +674,38 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
   if (endpoint.startsWith("/api/guidelines/compare-versions")) {
     return {
       document_title: "Nila Foods Brand & Marketing Compliance Guidelines",
-      v1_version: "1.0",
-      v2_version: "2.0",
-      clauses_added: [
+      v1: "1.0",
+      v2: "2.0",
+      diffs: [
+        {
+          clause_number: "2.1",
+          type: "unchanged",
+          v1: "Brand communication must remain warm, grounded, authentic, and informative. High-pressure sales triggers, aggressive urgency (such as 'Buy now', 'Hurry', 'Act fast'), and artificial scarcity are strictly prohibited.",
+          v2: "Brand communication must remain warm, grounded, authentic, and informative. High-pressure sales triggers, aggressive urgency (such as 'Buy now', 'Hurry', 'Act fast'), and artificial scarcity are strictly prohibited.",
+        },
+        {
+          clause_number: "3.4",
+          type: "modified",
+          v1: "Superlative claims (such as '#1', 'India\\'s best') require supporting retail audit or certification evidence.",
+          v2: "Superlative claims (such as '#1', 'India\\'s best', 'top-ranked') require current, independently verifiable third-party certification or retail audit data. If supporting evidence has expired or does not substantiate the claim, the statement must be rejected.",
+        },
         {
           clause_number: "3.6",
-          title: "Health & Therapeutic Claims",
-          category: "Health & Nutrition",
-          severity: "critical",
-          description:
-            "Prohibits medical guarantees and clinical therapeutic promises without licensed verification.",
+          type: "added",
+          v1: null,
+          v2: "Health guarantees or clinical therapeutic promises (e.g. 'Guaranteed to cut sugar cravings', 'cures fatigue') are strictly prohibited without licensed clinical certification. Product benefits must be framed around verifiable nutritional facts.",
         },
         {
           clause_number: "4.1",
-          title: "Product Terminology & Naming",
-          category: "Terminology",
-          severity: "critical",
-          description:
-            "Mandates 'Nila Millet Mix' trademark compliance and prohibits hyphenated forms.",
-        },
-      ],
-      clauses_modified: [
-        {
-          clause_number: "3.4",
-          title: "Superlative & Ranking Claims",
-          category: "Claims & Advertising",
-          severity: "critical",
-          description:
-            "Tightened evidence expiration rules: any retail ranking claim must be backed by non-expired audit data.",
-        },
-      ],
-      clauses_unchanged: [
-        {
-          clause_number: "2.1",
-          title: "Brand Tone & Consumer Respect",
-          category: "Brand Voice",
-          severity: "warning",
+          type: "added",
+          v1: null,
+          v2: "The approved, registered trademarked product title is 'Nila Millet Mix'. Hyphenated forms such as 'Millet-Mix' or uncapitalized variants are brand compliance violations.",
         },
         {
           clause_number: "5.2",
-          title: "Accessibility and Media Alt Text",
-          category: "Accessibility",
-          severity: "warning",
+          type: "unchanged",
+          v1: "All published digital media, packaging mockups, and images must include clear, descriptive alternative text for screen readers and accessibility conformance.",
+          v2: "All published digital media, packaging mockups, and images must include clear, descriptive alternative text for screen readers and accessibility conformance.",
         },
       ],
     } as unknown as T;

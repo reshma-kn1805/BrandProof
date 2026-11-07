@@ -358,6 +358,8 @@ export const mockDashboardMetrics: DashboardMetrics = {
       title: "Q1 Multi-Channel Launch Copy (Test Draft)",
       author: "Arjun Mehta",
       score: 25,
+      status: "in_review",
+      date: "Today, 10:15 AM",
       submitted: "Today, 10:15 AM",
     },
   ],

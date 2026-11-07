@@ -24,9 +24,18 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [activeView, setActiveView] = useState<ActiveView | "review_detail">("dashboard");
   const [selectedReviewId, setSelectedReviewId] = useState<number | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   useEffect(() => {
     checkAuth();
+    if (
+      typeof window !== "undefined" &&
+      (window.location.hostname.includes("github.io") ||
+        window.location.hostname.includes("vercel.app") ||
+        window.location.port === "")
+    ) {
+      setIsDemoMode(true);
+    }
   }, []);
 
   const checkAuth = async () => {
@@ -140,6 +149,11 @@ export default function Home() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {isDemoMode && (
+          <div className="bg-[#EAF2F3] border-b border-[#205E65]/20 text-[#205E65] px-4 py-1.5 text-xs text-center font-medium">
+            Demo mode: this page runs in your browser on sample data. The full engine runs from the GitHub repository.
+          </div>
+        )}
         <Header
           title={getViewTitle()}
           currentUser={currentUser}

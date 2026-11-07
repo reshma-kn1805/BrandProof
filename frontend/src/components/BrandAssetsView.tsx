@@ -81,7 +81,7 @@ export const BrandAssetsView: React.FC<BrandAssetsViewProps> = ({ currentUser })
             Loading brand assets repository...
           </div>
         ) : (
-          assets.map((asset) => {
+          (assets ?? []).map((asset) => {
             const hasAlt = Boolean(asset.alt_text && asset.alt_text.trim().length > 5);
 
             return (
@@ -97,7 +97,7 @@ export const BrandAssetsView: React.FC<BrandAssetsViewProps> = ({ currentUser })
                       className="max-h-full max-w-full object-contain rounded"
                     />
                     <span className="absolute top-2.5 right-2.5 text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-[#172E35] text-white">
-                      {asset.asset_type.replace("_", " ")}
+                      {(asset.asset_type ?? "asset").replace(/_/g, " ")}
                     </span>
                   </div>
 

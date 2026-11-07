@@ -60,7 +60,7 @@ export const ApprovalQueueView: React.FC<ApprovalQueueViewProps> = ({
           </div>
         ) : (
           <div className="divide-y divide-[#DCE7E8]">
-            {reviews.map((r) => (
+            {(reviews ?? []).map((r) => (
               <div
                 key={r.id}
                 onClick={() => onSelectReview(r.id)}
@@ -76,12 +76,12 @@ export const ApprovalQueueView: React.FC<ApprovalQueueViewProps> = ({
                           : "bg-[#EAF2F3] text-[#205E65]"
                       }`}
                     >
-                      {r.status.replace("_", " ")}
+                      {(r.status ?? "in_review").replace(/_/g, " ")}
                     </span>
                   </div>
                   <p className="text-xs text-[#63777C]">
                     Submitted by <strong>{r.author_name}</strong> • Source:{" "}
-                    <span className="font-mono">{r.source_filename}</span> • {r.revisions.length} revision(s)
+                    <span className="font-mono">{r.source_filename}</span> • {(r.revisions ?? []).length} revision(s)
                   </p>
                   {r.review_notes && (
                     <p className="text-xs text-[#B45309] bg-[#FEF3C7]/40 p-1.5 rounded border border-[#F59E0B]/20 max-w-xl">

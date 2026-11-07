@@ -212,7 +212,7 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
                 onChange={(e) => {
                   if (e.target.files && e.target.files[0]) {
                     setSelectedFile(e.target.files[0]);
-                    if (!title) {
+                    if (!title && e.target.files[0].name) {
                       setTitle(e.target.files[0].name.replace(/\.[^/.]+$/, ""));
                     }
                   }
