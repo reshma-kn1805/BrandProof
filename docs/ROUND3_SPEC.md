@@ -66,3 +66,4 @@ Commits: hash + message
 
 ## 8. Kickoff message
 Read docs/ROUND3_SPEC.md fully. This is the final round of a hackathon and judges open the live link alone. Do not change direction; finish and deepen what exists. Work strictly one phase at a time: I will paste each phase prompt. After each phase run the verification steps, commit small and often, and give me the report in the format of section 7. Never claim a result you did not see. Confirm you have read the spec by listing the three improvements and the eight known problems in your own words, then wait for Phase 1.
+
