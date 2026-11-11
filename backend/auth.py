@@ -1,5 +1,7 @@
 import os
 import datetime
+import secrets
+import logging
 from typing import Optional, List
 import jwt
 import bcrypt
@@ -9,7 +11,22 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "brandproof-hackathon-round2-super-secure-key-2026")
+logger = logging.getLogger("brandproof.auth")
+
+ENV = (os.getenv("ENV") or os.getenv("ENVIRONMENT") or "development").lower()
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+
+if not JWT_SECRET_KEY:
+    if ENV == "production":
+        raise RuntimeError("FATAL: JWT_SECRET_KEY environment variable must be set when ENV=production.")
+    else:
+        JWT_SECRET_KEY = secrets.token_urlsafe(32)
+        logger.warning(
+            "JWT_SECRET_KEY not set in environment. Generated ephemeral development secret. "
+            "Set JWT_SECRET_KEY in production to maintain persistent user sessions."
+        )
+
+SECRET_KEY = JWT_SECRET_KEY
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 

@@ -250,6 +250,21 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
         </div>
       </div>
 
+      {/* AI Unavailable Banner if external LLM failed or timed out */}
+      {review.review_notes && (review.review_notes.toLowerCase().includes("ai review unavailable") || review.review_notes.toLowerCase().includes("ai call failed")) && (
+        <div className="bg-[#FEF3C7] border border-[#F59E0B]/40 rounded-lg p-3 text-xs text-[#B45309] flex items-center justify-between shadow-subtle">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-[#F59E0B] shrink-0" />
+            <span>
+              <strong>AI Unavailable:</strong> {review.review_notes}
+            </span>
+          </div>
+          <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-white text-[#B45309] border border-[#F59E0B]/30 font-semibold shrink-0">
+            Deterministic Engine Active
+          </span>
+        </div>
+      )}
+
       {/* Main 2-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Content, Diffs, Revisions, Comments (7 cols) */}

@@ -78,6 +78,8 @@ async def submit_content_text(
     pipeline = ReviewPipeline(db, current_user.organization_id)
     pipeline_res = await pipeline.execute(payload.content)
 
+    ai_notice = pipeline_res.get("ai_notice") if pipeline_res.get("ai_unavailable") else None
+
     review = ContentReview(
         organization_id=current_user.organization_id,
         title=payload.title,
@@ -90,6 +92,7 @@ async def submit_content_text(
         overall_score=pipeline_res["overall_score"],
         has_critical_violations=pipeline_res["has_critical_violations"],
         requires_human_attention=pipeline_res["requires_human_attention"],
+        review_notes=ai_notice,
     )
     db.add(review)
     db.commit()

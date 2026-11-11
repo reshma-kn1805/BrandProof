@@ -4,13 +4,16 @@ sys.path.insert(0, os.path.abspath("."))
 
 from backend.database import SessionLocal, Base, engine
 from backend.models import ContentReview, ReviewFinding, ApprovedFact, GuidelineClause
+from backend.seed import seed_database
 from backend.engine.evidence_retriever import EvidenceRetriever
 from backend.engine.deterministic_engine import DeterministicEngine
 from backend.engine.verification_layer import IndependentVerificationLayer
 
 def run_unit_tests():
     print("--- [1/4] Database Verification ---", flush=True)
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
+    seed_database(db)
 
     try:
         # Check seed data

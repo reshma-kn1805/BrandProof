@@ -1,7 +1,10 @@
 import os
 import json
+import logging
 import httpx
 from typing import List, Dict, Any, Optional
+
+logger = logging.getLogger("brandproof.ai_review")
 
 class AIReviewEngine:
     """
@@ -13,7 +16,9 @@ class AIReviewEngine:
     def __init__(self, evidence_context: Dict[str, Any]):
         self.evidence_context = evidence_context
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
     def is_ai_available(self) -> bool:
         return bool(self.gemini_api_key or self.openai_api_key)
@@ -25,7 +30,8 @@ class AIReviewEngine:
         if not self.is_ai_available():
             return {
                 "ai_active": False,
-                "provider": "none",
+                "ai_unavailable": False,
+                "provider": "offline-rules",
                 "notice": "External LLM API key not configured. Using deterministic compliance engine.",
                 "findings": []
             }
@@ -37,7 +43,7 @@ class AIReviewEngine:
         elif self.openai_api_key:
             return await self._call_openai(prompt)
         
-        return {"ai_active": False, "findings": []}
+        return {"ai_active": False, "ai_unavailable": False, "findings": []}
 
     def _construct_prompt(self, content: str) -> str:
         clauses_summary = "\n".join([
@@ -95,7 +101,7 @@ Respond with ONLY valid JSON with this exact structure:
 """
 
     async def _call_gemini(self, prompt: str) -> Dict[str, Any]:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.gemini_api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={self.gemini_api_key}"
         headers = {"Content-Type": "application/json"}
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
@@ -104,6 +110,7 @@ Respond with ONLY valid JSON with this exact structure:
                 "temperature": 0.1
             }
         }
+        error_detail = "Unknown error"
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 res = await client.post(url, headers=headers, json=payload)
@@ -115,16 +122,25 @@ Respond with ONLY valid JSON with this exact structure:
                         f["engine_source"] = "ai_gemini"
                     return {
                         "ai_active": True,
-                        "provider": "gemini-1.5-flash",
+                        "ai_unavailable": False,
+                        "provider": f"Gemini ({self.gemini_model})",
                         "findings": parsed.get("findings", [])
                     }
+                else:
+                    error_detail = f"HTTP {res.status_code}: {res.text[:200]}"
+                    logger.warning("Gemini API error (model: %s): %s", self.gemini_model, error_detail)
+        except httpx.TimeoutException:
+            error_detail = "Request timed out after 15 seconds"
+            logger.warning("Gemini API timeout (model: %s)", self.gemini_model)
         except Exception as e:
-            pass
+            error_detail = str(e)
+            logger.warning("Gemini API call failed (model: %s): %s", self.gemini_model, error_detail)
 
         return {
             "ai_active": False,
-            "provider": "gemini (failed)",
-            "notice": "AI call failed, deterministic engine applied.",
+            "ai_unavailable": True,
+            "provider": f"Gemini ({self.gemini_model}) - offline fallback",
+            "notice": f"AI review unavailable ({error_detail}). Offline deterministic engine applied.",
             "findings": []
         }
 
@@ -135,11 +151,12 @@ Respond with ONLY valid JSON with this exact structure:
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "gpt-4o-mini",
+            "model": self.openai_model,
             "messages": [{"role": "user", "content": prompt}],
             "response_format": {"type": "json_object"},
             "temperature": 0.1
         }
+        error_detail = "Unknown error"
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 res = await client.post(url, headers=headers, json=payload)
@@ -151,16 +168,25 @@ Respond with ONLY valid JSON with this exact structure:
                         f["engine_source"] = "ai_openai"
                     return {
                         "ai_active": True,
-                        "provider": "gpt-4o-mini",
+                        "ai_unavailable": False,
+                        "provider": f"OpenAI ({self.openai_model})",
                         "findings": parsed.get("findings", [])
                     }
+                else:
+                    error_detail = f"HTTP {res.status_code}: {res.text[:200]}"
+                    logger.warning("OpenAI API error (model: %s): %s", self.openai_model, error_detail)
+        except httpx.TimeoutException:
+            error_detail = "Request timed out after 15 seconds"
+            logger.warning("OpenAI API timeout (model: %s)", self.openai_model)
         except Exception as e:
-            pass
+            error_detail = str(e)
+            logger.warning("OpenAI API call failed (model: %s): %s", self.openai_model, error_detail)
 
         return {
             "ai_active": False,
-            "provider": "openai (failed)",
-            "notice": "AI call failed, deterministic engine applied.",
+            "ai_unavailable": True,
+            "provider": f"OpenAI ({self.openai_model}) - offline fallback",
+            "notice": f"AI review unavailable ({error_detail}). Offline deterministic engine applied.",
             "findings": []
         }
 

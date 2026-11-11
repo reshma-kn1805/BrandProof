@@ -66,7 +66,9 @@ class ReviewPipeline:
             "has_critical_violations": has_critical,
             "requires_human_attention": requires_attention,
             "ai_active": ai_res.get("ai_active", False),
+            "ai_unavailable": ai_res.get("ai_unavailable", False),
             "ai_provider": ai_res.get("provider", "deterministic-fallback"),
+            "ai_notice": ai_res.get("notice"),
             "total_issues": len(verified_findings),
         }
 

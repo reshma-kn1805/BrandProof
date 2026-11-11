@@ -9,13 +9,14 @@ from backend.models import (
 from backend.auth import get_password_hash
 
 def seed_database(db: Session = None):
-    # Ensure tables exist
-    Base.metadata.create_all(bind=engine)
-
     close_db = False
     if db is None:
         db = SessionLocal()
         close_db = True
+
+    # Ensure tables exist on the active engine/bind
+    target_bind = db.get_bind() if db is not None else engine
+    Base.metadata.create_all(bind=target_bind)
 
     try:
         # Check if organization exists
@@ -76,7 +77,12 @@ def seed_database(db: Session = None):
             db.commit()
             db.refresh(doc)
 
-            # Version 2.0 (Active)
+        # Version 2.0 (Active)
+        ver = db.query(GuidelineVersion).filter(
+            GuidelineVersion.document_id == doc.id,
+            GuidelineVersion.version_number == "2.0"
+        ).first()
+        if not ver:
             ver = GuidelineVersion(
                 document_id=doc.id,
                 version_number="2.0",
@@ -87,7 +93,12 @@ def seed_database(db: Session = None):
             db.commit()
             db.refresh(ver)
 
-            # Version 1.0 (Archived, for version comparison demo)
+        # Version 1.0 (Archived, for version comparison demo)
+        ver_old = db.query(GuidelineVersion).filter(
+            GuidelineVersion.document_id == doc.id,
+            GuidelineVersion.version_number == "1.0"
+        ).first()
+        if not ver_old:
             ver_old = GuidelineVersion(
                 document_id=doc.id,
                 version_number="1.0",
@@ -98,46 +109,52 @@ def seed_database(db: Session = None):
             db.add(ver_old)
             db.commit()
 
-            # Clauses
-            clauses_data = [
-                {
-                    "clause_number": "2.1",
-                    "title": "Brand Tone & Consumer Respect",
-                    "description": "Brand communication must remain warm, grounded, authentic, and informative. High-pressure sales triggers, aggressive urgency (such as 'Buy now', 'Hurry', 'Act fast'), and artificial scarcity are strictly prohibited.",
-                    "category": "Brand Voice",
-                    "severity": "warning",
-                },
-                {
-                    "clause_number": "3.4",
-                    "title": "Superlative & Ranking Claims",
-                    "description": "Superlative claims (such as '#1', 'India\'s best', 'top-ranked') require current, independently verifiable third-party certification or retail audit data. If supporting evidence has expired or does not substantiate the claim, the statement must be rejected.",
-                    "category": "Claims & Advertising",
-                    "severity": "critical",
-                },
-                {
-                    "clause_number": "3.6",
-                    "title": "Health & Therapeutic Claims",
-                    "description": "Health guarantees or clinical therapeutic promises (e.g. 'Guaranteed to cut sugar cravings', 'cures fatigue') are strictly prohibited without licensed clinical certification. Product benefits must be framed around verifiable nutritional facts.",
-                    "category": "Health & Nutrition",
-                    "severity": "critical",
-                },
-                {
-                    "clause_number": "4.1",
-                    "title": "Product Terminology & Naming",
-                    "description": "The approved, registered trademarked product title is 'Nila Millet Mix'. Hyphenated forms such as 'Millet-Mix' or uncapitalized variants are brand compliance violations.",
-                    "category": "Terminology",
-                    "severity": "critical",
-                },
-                {
-                    "clause_number": "5.2",
-                    "title": "Accessibility and Media Alt Text",
-                    "description": "All published digital media, packaging mockups, and images must include clear, descriptive alternative text for screen readers and accessibility conformance.",
-                    "category": "Accessibility",
-                    "severity": "warning",
-                },
-            ]
+        # Clauses
+        clauses_data = [
+            {
+                "clause_number": "2.1",
+                "title": "Brand Tone & Consumer Respect",
+                "description": "Brand communication must remain warm, grounded, authentic, and informative. High-pressure sales triggers, aggressive urgency (such as 'Buy now', 'Hurry', 'Act fast'), and artificial scarcity are strictly prohibited.",
+                "category": "Brand Voice",
+                "severity": "warning",
+            },
+            {
+                "clause_number": "3.4",
+                "title": "Superlative & Ranking Claims",
+                "description": "Superlative claims (such as '#1', 'India\'s best', 'top-ranked') require current, independently verifiable third-party certification or retail audit data. If supporting evidence has expired or does not substantiate the claim, the statement must be rejected.",
+                "category": "Claims & Advertising",
+                "severity": "critical",
+            },
+            {
+                "clause_number": "3.6",
+                "title": "Health & Therapeutic Claims",
+                "description": "Health guarantees or clinical therapeutic promises (e.g. 'Guaranteed to cut sugar cravings', 'cures fatigue') are strictly prohibited without licensed clinical certification. Product benefits must be framed around verifiable nutritional facts.",
+                "category": "Health & Nutrition",
+                "severity": "critical",
+            },
+            {
+                "clause_number": "4.1",
+                "title": "Product Terminology & Naming",
+                "description": "The approved, registered trademarked product title is 'Nila Millet Mix'. Hyphenated forms such as 'Millet-Mix' or uncapitalized variants are brand compliance violations.",
+                "category": "Terminology",
+                "severity": "critical",
+            },
+            {
+                "clause_number": "5.2",
+                "title": "Accessibility and Media Alt Text",
+                "description": "All published digital media, packaging mockups, and images must include clear, descriptive alternative text for screen readers and accessibility conformance.",
+                "category": "Accessibility",
+                "severity": "warning",
+            },
+        ]
 
-            for c in clauses_data:
+        for c in clauses_data:
+            existing_clause = db.query(GuidelineClause).filter(
+                GuidelineClause.organization_id == org.id,
+                GuidelineClause.clause_number == c["clause_number"],
+                GuidelineClause.version_id == ver.id
+            ).first()
+            if not existing_clause:
                 clause = GuidelineClause(
                     version_id=ver.id,
                     organization_id=org.id,
@@ -149,7 +166,7 @@ def seed_database(db: Session = None):
                     status="active"
                 )
                 db.add(clause)
-            db.commit()
+        db.commit()
 
         # Approved Facts (F-07 Expired Dec 31 2025, F-12 Valid until Dec 2027)
         fact_f07 = db.query(ApprovedFact).filter(
@@ -215,8 +232,11 @@ def seed_database(db: Session = None):
         db.commit()
 
         # Terminology Rules
-        term = db.query(Terminology).filter(Terminology.organization_id == org.id).first()
-        if not term:
+        term1 = db.query(Terminology).filter(
+            Terminology.organization_id == org.id,
+            Terminology.preferred_term == "Nila Millet Mix"
+        ).first()
+        if not term1:
             t1 = Terminology(
                 organization_id=org.id,
                 preferred_term="Nila Millet Mix",
@@ -226,6 +246,13 @@ def seed_database(db: Session = None):
                 case_sensitive=False,
                 notes="Registered trademark requires capital Mix and single space separator."
             )
+            db.add(t1)
+
+        term2 = db.query(Terminology).filter(
+            Terminology.organization_id == org.id,
+            Terminology.preferred_term == "Whole Grain Millets"
+        ).first()
+        if not term2:
             t2 = Terminology(
                 organization_id=org.id,
                 preferred_term="Whole Grain Millets",
@@ -235,13 +262,15 @@ def seed_database(db: Session = None):
                 case_sensitive=False,
                 notes="Emphasize whole grain integrity."
             )
-            db.add(t1)
             db.add(t2)
-            db.commit()
+        db.commit()
 
         # Brand Assets
-        asset = db.query(BrandAsset).filter(BrandAsset.organization_id == org.id).first()
-        if not asset:
+        asset1 = db.query(BrandAsset).filter(
+            BrandAsset.organization_id == org.id,
+            BrandAsset.title == "Nila Foods Primary Logo Mark"
+        ).first()
+        if not asset1:
             a1 = BrandAsset(
                 organization_id=org.id,
                 title="Nila Foods Primary Logo Mark",
@@ -251,6 +280,13 @@ def seed_database(db: Session = None):
                 guidelines_notes="Minimum clear space 24px; never alter color spectrum or aspect ratio.",
                 status="active"
             )
+            db.add(a1)
+
+        asset2 = db.query(BrandAsset).filter(
+            BrandAsset.organization_id == org.id,
+            BrandAsset.title == "Millet Mix 500g Packaging Mockup"
+        ).first()
+        if not asset2:
             a2 = BrandAsset(
                 organization_id=org.id,
                 title="Millet Mix 500g Packaging Mockup",
@@ -260,9 +296,8 @@ def seed_database(db: Session = None):
                 guidelines_notes="Must display organic certification seal prominently.",
                 status="active"
             )
-            db.add(a1)
             db.add(a2)
-            db.commit()
+        db.commit()
 
         # Fictional Demonstration Initial Content Review: Sample with violations
         review = db.query(ContentReview).filter(
