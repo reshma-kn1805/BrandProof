@@ -1,0 +1,28 @@
+name: Keep-Warm Service Ping
+
+on:
+  schedule:
+    # Run every 10 minutes to prevent Render free instance spin-down
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping BrandProof Backend Health
+        env:
+          API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "Notice: NEXT_PUBLIC_API_URL repository variable is not set. Skipping keep-warm ping."
+            exit 0
+          fi
+          echo "Pinging $API_URL/api/health to prevent cold start..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$API_URL/api/health" || echo "failed")
+          echo "Health check HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "Service is warm and operational."
+          else
+            echo "Notice: Non-200 or timeout during ping ($HTTP_STATUS). Server may be spinning up."
+          fi

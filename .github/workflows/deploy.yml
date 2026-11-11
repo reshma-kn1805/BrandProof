@@ -39,6 +39,7 @@ jobs:
         working-directory: ./frontend
         env:
           NEXT_EXPORT: "true"
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
         run: npm run build
 
       - name: Add .nojekyll

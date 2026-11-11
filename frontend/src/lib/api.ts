@@ -15,7 +15,36 @@ import {
   mockAuditLogs,
 } from "./mockData";
 
-const API_BASE = ""; // Proxied via next.config.js to http://127.0.0.1:8000
+export const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
+
+export type EngineMode = "connected" | "demo";
+let activeEngineMode: EngineMode = "connected";
+
+export const getEngineMode = (): EngineMode => activeEngineMode;
+export const setEngineMode = (mode: EngineMode) => {
+  activeEngineMode = mode;
+};
+
+export async function checkBackendHealth(timeoutMs: number = 6000): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_BASE}/api/health`, {
+      method: "GET",
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      return data.status === "healthy" || data.status === "degraded";
+    }
+    return false;
+  } catch (_) {
+    clearTimeout(timeoutId);
+    return false;
+  }
+}
 
 export interface User {
   id: number;
@@ -202,16 +231,6 @@ export const clearToken = () => {
     localStorage.removeItem("brandproof_token");
     localStorage.removeItem("brandproof_active_user");
   }
-};
-
-// Check if running on GitHub Pages (static environment)
-const isGitHubPages = (): boolean => {
-  if (typeof window === "undefined") return false;
-  return (
-    window.location.hostname.includes("github.io") ||
-    window.location.hostname.includes("vercel.app") ||
-    window.location.port === ""
-  );
 };
 
 // Client-side in-memory mock store
@@ -404,37 +423,57 @@ async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  // If running on GitHub Pages or if local backend is not reachable, gracefully fallback to mockStore
-  if (!isGitHubPages()) {
-    try {
-      const token = getToken();
-      const headers: Record<string, string> = {
-        ...(options.headers as Record<string, string>),
-      };
-
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-
-      if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
-        headers["Content-Type"] = "application/json";
-      }
-
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers,
-      });
-
-      if (res.ok) {
-        return (await res.json()) as T;
-      }
-    } catch (_) {
-      // Backend not running locally or failed - fall through to client store
-    }
+  // If in demo mode, route directly to the client mock store
+  if (activeEngineMode === "demo") {
+    return handleMockRequest<T>(endpoint, options);
   }
 
-  // --- Client-side fallback handling for GitHub Pages & standalone demos ---
-  return handleMockRequest<T>(endpoint, options);
+  // Real backend mode
+  const token = getToken();
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (res.status === 401) {
+    clearToken();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("brandproof:session_expired", {
+          detail: "Your session expired",
+        })
+      );
+    }
+    throw new Error("Your session expired");
+  }
+
+  if (!res.ok) {
+    let errorMsg = `Request failed with status ${res.status}`;
+    try {
+      const errData = await res.json();
+      if (errData?.detail) {
+        errorMsg =
+          typeof errData.detail === "string"
+            ? errData.detail
+            : JSON.stringify(errData.detail);
+      }
+    } catch (_) {}
+    throw new Error(errorMsg);
+  }
+
+  return (await res.json()) as T;
 }
 
 function handleMockRequest<T>(endpoint: string, options: RequestInit): T {

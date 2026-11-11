@@ -5,9 +5,10 @@ import { api, setToken, User as UserType } from "../lib/api";
 
 interface AuthModalProps {
   onSuccess: (user: UserType) => void;
+  sessionExpiredMessage?: string | null;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess, sessionExpiredMessage }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -156,6 +157,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
               {isRegister ? "Register a new organization workspace" : "Enter your email credentials"}
             </p>
           </div>
+
+          {sessionExpiredMessage && (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded text-xs text-amber-900 flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span>{sessionExpiredMessage}</span>
+            </div>
+          )}
 
           {error && (
             <div className="p-3 bg-[#FEE2E2] border border-[#FCA5A5] rounded text-xs text-[#B91C1C]">

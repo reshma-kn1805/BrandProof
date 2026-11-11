@@ -28,3 +28,4 @@ def initialize_test_database():
         _test_dir.cleanup()
     except Exception:
         pass
+

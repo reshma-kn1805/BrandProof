@@ -19,6 +19,11 @@ BrandProof is an intelligent, evidence-first brand-governance and content compli
 | 🩺 **System Health Check** | **[http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)** | Multi-Stage Engine Status |
 | 📦 **GitHub Repository** | **[github.com/reshma-kn1805/BrandProof](https://github.com/reshma-kn1805/BrandProof)** | Verified Source Code & Git History |
 
+### ⏱️ Backend Keep-Warm Measure
+Free cloud hosting tiers (such as Render) automatically suspend inactive containers after 15 minutes of idle time. To prevent cold starts and ensure near-instant responses for reviewers and judges:
+- A GitHub Actions scheduled workflow (`.github/workflows/keep-warm.yml`) runs every **10 minutes**, pinging the `/api/health` endpoint.
+- If the server is in a sleeping state upon a user's initial visit, the frontend gracefully displays a *"Waking the server, one moment"* status while polling with exponential backoff for up to 60 seconds before falling back to browser demo mode. Real backend connectivity is restored automatically without manual intervention.
+
 ### 🎯 Instant Testing Instructions (30 Seconds)
 1. Open the live link: **[https://reshma-kn1805.github.io/BrandProof/](https://reshma-kn1805.github.io/BrandProof/)**
 2. Click **"1-Click Creator (Anita / Arjun)"** in the top navigation or modal to authenticate.

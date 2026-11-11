@@ -63,3 +63,4 @@ jobs:
           NEXT_EXPORT: "true"
           NEXT_TELEMETRY_DISABLED: "1"
         run: npm run build
+
