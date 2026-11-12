@@ -29,6 +29,7 @@ export type ActiveView =
   | "assets"
   | "approvals"
   | "audit"
+  | "verify_report"
   | "team"
   | "settings";
 
@@ -58,6 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: "assets", label: "Brand Assets", icon: ImageIcon },
     { section: "SYSTEM & AUDIT" },
     { id: "audit", label: "Audit Logs", icon: History },
+    { id: "verify_report", label: "Verify Report", icon: ShieldAlert },
     { id: "team", label: "Team & Permissions", icon: Users },
     { id: "settings", label: "Workspace & AI Settings", icon: Settings },
   ];

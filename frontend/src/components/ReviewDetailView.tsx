@@ -18,8 +18,10 @@ import {
   HelpCircle,
   Send,
   CornerDownRight,
+  Download,
+  Lock,
 } from "lucide-react";
-import { api, ContentReview, ReviewFinding, User } from "../lib/api";
+import { api, ContentReview, ReviewFinding, User, activeEngineMode } from "../lib/api";
 
 interface ReviewDetailViewProps {
   reviewId: number;
@@ -257,16 +259,32 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                 {(review.status ?? "in_review").replace(/_/g, " ")}
               </span>
             </div>
-            <p className="text-xs text-[#63777C] mt-0.5">
-              Author: <strong className="text-[#172C32]">{review.author_name}</strong> • Source:{" "}
-              <span className="font-mono">{review.source_filename || "direct_input.txt"}</span> • Revisions:{" "}
-              {(review.revisions ?? []).length}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-[#63777C]">
+              <span>
+                Author: <strong className="text-[#172C32]">{review.author_name}</strong> • Source:{" "}
+                <span className="font-mono">{review.source_filename || "direct_input.txt"}</span> • Revisions:{" "}
+                {(review.revisions ?? []).length}
+              </span>
+              {review.confidential_mode && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#DCFCE7] text-[#166534] border border-[#86EFAC]">
+                  <Lock className="w-3 h-3" />
+                  <span>Confidential Mode</span>
+                </span>
+              )}
+              {review.report_fingerprint && (
+                <span
+                  className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-[#F1F5F9] text-[#475569] border border-[#CBD5E1]"
+                  title={`Cryptographic Report Fingerprint: ${review.report_fingerprint}`}
+                >
+                  FP: {review.report_fingerprint.slice(0, 10)}...
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Right Score Gauge & Decision Actions */}
-        <div className="flex items-center gap-4">
+        {/* Right Score Gauge, Export PDF & Decision Actions */}
+        <div className="flex items-center gap-3">
           <div className="text-right">
             <span className="text-[10px] font-mono text-[#63777C] uppercase block">Compliance Health</span>
             <span
@@ -281,6 +299,28 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
               {review.overall_score}%
             </span>
           </div>
+
+          {/* Export Audit Report Button */}
+          <button
+            onClick={() => {
+              if (activeEngineMode === "demo") return;
+              window.open(api.getReportPdfUrl(review.id), "_blank");
+            }}
+            disabled={activeEngineMode === "demo"}
+            className={`px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors flex items-center gap-1.5 ${
+              activeEngineMode === "demo"
+                ? "bg-[#DCE7E8] text-[#63777C] cursor-not-allowed border border-[#CBD5E1]"
+                : "bg-[#205E65] hover:bg-[#172E35] text-white"
+            }`}
+            title={
+              activeEngineMode === "demo"
+                ? "Available when connected to the full engine"
+                : "Export cryptographic PDF audit report with hash chain fingerprint"
+            }
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Audit Report</span>
+          </button>
 
           {/* Decision Buttons (for Reviewer / Manager) */}
           {isReviewerOrManager && (

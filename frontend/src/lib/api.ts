@@ -18,7 +18,7 @@ import {
 export const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
 
 export type EngineMode = "connected" | "demo";
-let activeEngineMode: EngineMode = "connected";
+export let activeEngineMode: EngineMode = "connected";
 
 export const getEngineMode = (): EngineMode => activeEngineMode;
 export const setEngineMode = (mode: EngineMode) => {
@@ -137,6 +137,9 @@ export interface ContentReview {
   overall_score: number;
   has_critical_violations: boolean;
   requires_human_attention: boolean;
+  confidential_mode?: boolean;
+  redaction_summary?: Record<string, any>;
+  report_fingerprint?: string;
   review_notes?: string;
   rejection_reason?: string;
   created_at: string;
@@ -218,7 +221,45 @@ export interface AuditLog {
   target_id?: number;
   details?: any;
   ip_address: string;
+  prev_hash?: string;
+  entry_hash?: string;
   created_at: string;
+}
+
+export interface AuditVerifyResult {
+  valid: boolean;
+  entries: number;
+  head: string | null;
+  first_broken_entry: number | null;
+}
+
+export interface RedactionPreviewResult {
+  original_text: string;
+  redacted_text: string;
+  counts: Record<string, number>;
+  tokens: Array<{ token: string; type: string; original: string }>;
+}
+
+export interface AICallLogEntry {
+  id: number;
+  provider: string;
+  model: string;
+  redaction_enabled: boolean;
+  redaction_counts?: Record<string, number>;
+  latency_ms: number;
+  status: string;
+  created_at: string;
+}
+
+export interface ReportVerifyResult {
+  matched: boolean;
+  review_id?: number;
+  title?: string;
+  status?: string;
+  score?: number;
+  fingerprint?: string;
+  stored_fingerprint?: string;
+  message?: string;
 }
 
 // Token helper
@@ -806,9 +847,69 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
     return mockStore.assets as unknown as T;
   }
 
-  // Audit Logs
+  // Audit Logs & Chain Verification
+  if (endpoint === "/api/audit/verify") {
+    return {
+      valid: true,
+      entries: mockStore.auditLogs.length,
+      head: "a8fbc73109a12c48e8e7c2035129ef90b7931c801e0ad8f203875ec01923ab91",
+      first_broken_entry: null,
+    } as unknown as T;
+  }
+
+  if (endpoint === "/api/audit/ai-calls") {
+    return [] as unknown as T;
+  }
+
   if (endpoint.startsWith("/api/audit")) {
     return mockStore.auditLogs as unknown as T;
+  }
+
+  // Redaction Preview
+  if (endpoint.startsWith("/api/reviews/redaction-preview")) {
+    let text = "";
+    if (options.body && typeof options.body === "string") {
+      try {
+        const parsed = JSON.parse(options.body);
+        text = parsed.text || "";
+      } catch (_) {}
+    }
+    const emailMatch = text.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b/g) || [];
+    const phoneMatch = text.match(/(?:\+91[\s.-]?)?[6-9]\d{9}\b/g) || [];
+    return {
+      original_text: text,
+      redacted_text: text
+        .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b/g, "[REDACTED_EMAIL_1]")
+        .replace(/(?:\+91[\s.-]?)?[6-9]\d{9}\b/g, "[REDACTED_PHONE_1]"),
+      counts: {
+        email: emailMatch.length,
+        phone: phoneMatch.length,
+        currency: 0,
+        digits: 0,
+        bracketed: 0,
+        terms: 0,
+        total: emailMatch.length + phoneMatch.length,
+      },
+      tokens: [
+        ...emailMatch.map((m) => ({ token: "[REDACTED_EMAIL_1]", type: "email", original: m })),
+        ...phoneMatch.map((m) => ({ token: "[REDACTED_PHONE_1]", type: "phone", original: m })),
+      ],
+    } as unknown as T;
+  }
+
+  // Report Verification
+  if (endpoint.includes("/verify-report") || endpoint === "/api/reports/verify") {
+    const review = mockStore.reviews[0];
+    return {
+      matched: true,
+      review_id: review?.id || 101,
+      title: review?.title || "Product Launch Marketing Campaign",
+      status: review?.status || "approved",
+      score: review?.overall_score || 100,
+      fingerprint: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      stored_fingerprint: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      message: "Cryptographic integrity verified. Record exactly matches database and tamper-evident audit ledger.",
+    } as unknown as T;
   }
 
   // Users & Team
@@ -864,10 +965,23 @@ export const api = {
     content: string;
     file_name?: string;
     file_type?: string;
+    confidential_mode?: boolean;
   }) =>
     apiFetch<ContentReview>("/api/reviews/submit", {
       method: "POST",
       body: JSON.stringify(data),
+    }),
+  getRedactionPreview: (text: string) =>
+    apiFetch<RedactionPreviewResult>("/api/reviews/redaction-preview", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  getReportPdfUrl: (reviewId: number) =>
+    `${API_BASE}/api/reviews/${reviewId}/report.pdf`,
+  verifyReport: (query: string) =>
+    apiFetch<ReportVerifyResult>("/api/reports/verify", {
+      method: "POST",
+      body: JSON.stringify({ query }),
     }),
   uploadReviewFile: (formData: FormData) =>
     apiFetch<ContentReview>("/api/reviews/upload", {
@@ -993,6 +1107,10 @@ export const api = {
     apiFetch<AuditLog[]>(
       `/api/audit/${actionFilter ? `?action_filter=${actionFilter}` : ""}`
     ),
+  verifyAuditChain: () =>
+    apiFetch<AuditVerifyResult>("/api/audit/verify"),
+  getAICalls: () =>
+    apiFetch<AICallLogEntry[]>("/api/audit/ai-calls"),
 
   // Users & Team
   getUsers: () => apiFetch<User[]>("/api/users/"),
@@ -1003,5 +1121,10 @@ export const api = {
 
   // Settings
   getWorkspaceSettings: () => apiFetch<any>("/api/settings/workspace"),
+  updateWorkspaceSettings: (data: any) =>
+    apiFetch<any>("/api/settings/workspace", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
   getAIPrivacySettings: () => apiFetch<any>("/api/settings/ai-privacy"),
 };

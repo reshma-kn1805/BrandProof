@@ -14,6 +14,7 @@ import { TerminologyView } from "../components/TerminologyView";
 import { BrandAssetsView } from "../components/BrandAssetsView";
 import { ApprovalQueueView } from "../components/ApprovalQueueView";
 import { AuditLogView } from "../components/AuditLogView";
+import { VerifyReportView } from "../components/VerifyReportView";
 import { TeamView } from "../components/TeamView";
 import { SettingsView } from "../components/SettingsView";
 import { AuthModal } from "../components/AuthModal";
@@ -420,6 +421,10 @@ export default function Home() {
             )}
 
             {activeView === "audit" && <AuditLogView />}
+
+            {activeView === "verify_report" && (
+              <VerifyReportView onOpenReview={handleSelectReview} />
+            )}
 
             {activeView === "team" && <TeamView currentUser={currentUser} />}
 

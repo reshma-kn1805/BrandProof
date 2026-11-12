@@ -6,8 +6,12 @@ import {
   CheckCircle2,
   AlertTriangle,
   ArrowRight,
+  Lock,
+  Eye,
+  X,
+  ShieldCheck,
 } from "lucide-react";
-import { api } from "../lib/api";
+import { api, RedactionPreviewResult } from "../lib/api";
 
 interface NewReviewViewProps {
   onReviewCreated: (id: number) => void;
@@ -21,9 +25,15 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
   const [tab, setTab] = useState<"text" | "file">("text");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [confidentialMode, setConfidentialMode] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Redaction Preview Modal
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewData, setPreviewData] = useState<RedactionPreviewResult | null>(null);
 
   // Preset demo drafts
   const SAMPLE_VIOLATIONS_DRAFT =
@@ -31,6 +41,9 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
 
   const SAMPLE_COMPLIANT_DRAFT =
     "Nila Millet Mix: a healthy breakfast made with 5 whole millets.";
+
+  const SAMPLE_CONFIDENTIAL_DRAFT =
+    "Nila Millet-Mix is India's #1 healthy breakfast! For bulk distribution quotes, email sales@nilafoods.com or call +91 9876543210. Approved budget: ₹50,000 via [[Project Phoenix]]. Buy now.";
 
   const handleLoadViolationsDraft = () => {
     setTitle("Q1 Millet-Mix Multi-Channel Campaign");
@@ -42,6 +55,27 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
     setTitle("Approved Social Post - Millets Nutritional Blend");
     setContent(SAMPLE_COMPLIANT_DRAFT);
     setError(null);
+  };
+
+  const handleLoadConfidentialDraft = () => {
+    setTitle("Confidential Wholesale Distribution Proposal");
+    setContent(SAMPLE_CONFIDENTIAL_DRAFT);
+    setConfidentialMode(true);
+    setError(null);
+  };
+
+  const handlePreviewRedaction = async () => {
+    if (!content.trim()) return;
+    try {
+      setPreviewLoading(true);
+      const res = await api.getRedactionPreview(content);
+      setPreviewData(res);
+      setShowPreviewModal(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to generate redaction preview");
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,6 +100,7 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
           content,
           file_name: "direct_input.txt",
           file_type: "text",
+          confidential_mode: confidentialMode,
         });
         onReviewCreated(review.id);
       } else {
@@ -77,6 +112,7 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
         const formData = new FormData();
         formData.append("title", title);
         formData.append("file", selectedFile);
+        formData.append("confidential_mode", String(confidentialMode));
         const review = await api.uploadReviewFile(formData);
         onReviewCreated(review.id);
       }
@@ -104,7 +140,7 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
       </div>
 
       {/* Preset Demo Buttons Card */}
-      <div className="bg-[#EAF2F3] border border-[#DCE7E8] rounded-lg p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+      <div className="bg-[#EAF2F3] border border-[#DCE7E8] rounded-lg p-4 flex flex-col items-start gap-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-[#328C91]" />
           <div>
@@ -114,7 +150,7 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleLoadViolationsDraft}
@@ -130,6 +166,14 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Load Clean Compliant Sample</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleLoadConfidentialDraft}
+            className="px-3 py-1.5 bg-white hover:bg-[#F7FAFA] text-[#205E65] border border-[#205E65]/30 text-xs font-semibold rounded shadow-subtle transition-colors flex items-center gap-1.5"
+          >
+            <Lock className="w-3.5 h-3.5 text-[#328C91]" />
+            <span>Load Confidential Sample (PII Redaction)</span>
           </button>
         </div>
       </div>
@@ -225,11 +269,52 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
                 <span className="text-xs font-semibold text-[#172C32]">
                   {selectedFile ? selectedFile.name : "Click to select or drag and drop document"}
                 </span>
-                <span className="text-[11px] text-[#63777C]">Supports DOCX, PDF, and plain text up to 25MB</span>
+                <span className="text-[11px] text-[#63777C]">Supports DOCX, PDF, and plain text up to 5MB</span>
               </label>
             </div>
           </div>
         )}
+
+        {/* Phase 5: Confidential Mode & Redaction Preview Control */}
+        <div className="p-4 bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-start gap-2.5">
+              <Lock className="w-4 h-4 text-[#1E7E51] mt-0.5 shrink-0" />
+              <div>
+                <label htmlFor="confidential-mode-checkbox" className="text-xs font-bold text-[#0F172A] cursor-pointer">
+                  Confidential Mode (Redact PII & sensitive data)
+                </label>
+                <p className="text-[11px] text-[#475569] mt-0.5">
+                  Masks email addresses, Indian/int'l phone numbers, currencies, digits, and [[confidential terms]] before sending to any external AI provider. Replaced tokens are restored locally before saving.
+                </p>
+              </div>
+            </div>
+            <input
+              id="confidential-mode-checkbox"
+              type="checkbox"
+              checked={confidentialMode}
+              onChange={(e) => setConfidentialMode(e.target.checked)}
+              className="w-4 h-4 text-[#328C91] rounded border-[#CBD5E1] focus:ring-[#328C91]"
+            />
+          </div>
+
+          {confidentialMode && content.trim() && (
+            <div className="pt-2 border-t border-[#E2E8F0] flex items-center justify-between">
+              <span className="text-[11px] text-[#64748B]">
+                Want to inspect what external services see?
+              </span>
+              <button
+                type="button"
+                onClick={handlePreviewRedaction}
+                disabled={previewLoading}
+                className="px-3 py-1 bg-white hover:bg-[#F1F5F9] text-[#205E65] border border-[#CBD5E1] rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>{previewLoading ? "Generating..." : "What will be sent preview"}</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="pt-2 flex items-center justify-end gap-3 border-t border-[#DCE7E8]">
           <button
@@ -252,13 +337,75 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
             ) : (
               <>
                 <span>Run BrandProof Engine</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-3.5 h-3.5" />
               </>
             )}
           </button>
         </div>
       </form>
+
+      {/* "What will be sent" Modal */}
+      {showPreviewModal && previewData && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-[#166534]" />
+                <h3 className="text-sm font-bold text-[#0F172A]">
+                  "What Will Be Sent" AI Redaction Preview
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="text-[#64748B] hover:text-[#0F172A]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#475569]">
+              This is the exact sanitized payload that would be transmitted to external LLM services. All sensitive entities have been transformed into deterministic tokens. Raw text and token mappings remain strictly on this system.
+            </p>
+
+            {/* Counts Badges */}
+            <div className="flex flex-wrap gap-2 text-[11px] font-mono font-semibold">
+              <span className="px-2 py-0.5 bg-[#EFF6FF] text-[#1D4ED8] rounded border border-[#BFDBFE]">
+                Total Redactions: {previewData.counts.total ?? 0}
+              </span>
+              <span className="px-2 py-0.5 bg-[#F0FDF4] text-[#15803D] rounded border border-[#BBF7D0]">
+                Emails: {previewData.counts.email ?? 0}
+              </span>
+              <span className="px-2 py-0.5 bg-[#FEF3C7] text-[#B45309] rounded border border-[#FDE68A]">
+                Phones: {previewData.counts.phone ?? 0}
+              </span>
+              <span className="px-2 py-0.5 bg-[#FAF5FF] text-[#7E22CE] rounded border border-[#E9D5FF]">
+                Currencies: {previewData.counts.currency ?? 0}
+              </span>
+              <span className="px-2 py-0.5 bg-[#FFF1F2] text-[#BE123C] rounded border border-[#FECDD3]">
+                Confidential Terms: {previewData.counts.terms ?? 0}
+              </span>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] uppercase font-mono font-bold text-[#64748B]">
+                Sanitized Payload
+              </span>
+              <div className="p-3 bg-[#0F172A] text-[#F8FAFC] font-mono text-xs rounded-md max-h-56 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                {previewData.redacted_text}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="px-4 py-1.5 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded"
+              >
+                Done Inspecting
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-
