@@ -44,5 +44,33 @@ This document tracks phase-by-phase execution, timestamps, changes, and verifica
   - Full-lifecycle production verification (`tests/test_phase2_verification.py`): All 9 steps passed (health check, creator login, draft submission, finding acceptances, manager approval, persisted database reload, 401 session expiration).
   - Offline backend simulation (`tests/test_offline_fallback.js`): Gracefully returned false in 48ms, showing waking retry and fallback banner without crash.
   - `python -m pytest tests -q`: 6 passed, 88 warnings in 7.40s.
-  - `python tests/test_engine_unit.py`: 100% verified.
+---
+
+## [Phase 3] Robustness, Guards, Idempotency & Error Handling
+- **Timestamp**: 2026-11-12 10:25:00 IST
+- **Status**: Completed & Verified
+- **Key Changes**:
+  - `backend/schemas.py`: Implemented robust Pydantic input validation across all request schemas, ensuring all text inputs are trimmed, rejecting empty or whitespace-only submissions, and enforcing a 50,000-character upper bound.
+  - `backend/document_parser.py`: Implemented strict file upload guards (5 MB max size, 0-byte check, content magic byte validation for `.pdf` `%PDF` and `.docx` `PK\x03\x04`, with descriptive friendly errors for empty, oversized, corrupt, or unsupported files).
+  - `backend/rate_limiter.py`: Implemented sliding-window in-memory rate limiting on `/api/auth/login` (10/min) and `/api/reviews/submit` (30/min) returning HTTP 429 with retry-after guidance.
+  - `backend/main.py`: Configured global exception handlers formatting `HTTPException`, `RequestValidationError`, and unexpected exceptions as `{"error": {"code": "...", "message": "..."}}`.
+  - `backend/routers/reviews_router.py`: Wrapped multi-step draft submissions and approvals in single atomic database transactions. Enforced finding action idempotency (accept/reject on already-actioned findings returns current state without duplicate revisions). Added review status guards blocking illegal transitions on finalized reviews and preventing approval with unresolved critical violations.
+  - `frontend/src/components/ErrorBoundary.tsx`: Implemented global React error boundary rendering *"Something went wrong. Reload or go back to the dashboard."* with reload and navigation controls.
+  - `frontend/src/app/page.tsx`: Wrapped application in `<ErrorBoundary>`, implemented deep link capture in `sessionStorage` (`brandproof_return_view`) with automatic redirection on authentication, and preserved offline demo mode selections across browser page reloads.
+  - `frontend/src/lib/api.ts`: Added 20-second timeout via `AbortController`, graceful `AbortError` handling, and extraction of structured backend error messages.
+  - `frontend/src/components/ReviewsView.tsx`, `ApprovalQueueView.tsx`, `AuditLogView.tsx`: Added meaningful empty states with clear calls to action, and retry buttons on network errors.
+  - `frontend/src/components/ReviewDetailView.tsx`: Added button disabling with spinners for finding actions and decision confirmations, and retry buttons on network failure.
+  - `tests/test_phase3_guards.py`: Added 12 unit tests covering empty/whitespace input, 50k character limit, empty files, oversized files, corrupt DOCX, corrupt PDF, unsupported extensions, finding action idempotency, approval idempotency, review status guards, and login rate limiting.
+  - `tests/test_playwright_e2e.py`: Added Playwright browser E2E test verifying rapid double-click handling and page reload persistence across Guidelines, Facts Ledger, Terminology, Content Reviews, and Review Detail views.
+- **Verification Results**:
+  - `python -m pytest tests -q`: 19 passed, 110 warnings in 15.65s (all baseline, guard, and E2E tests).
+  - `python tests/test_engine_unit.py`: 100% verified (all 4 phases passed).
+  - `python tests/test_phase2_verification.py`: All 9 full-lifecycle production steps passed.
+  - Manual edge cases:
+    - Empty input: HTTP 422 `{'error': {'code': 'VALIDATION_ERROR', 'message': 'content: Review content cannot be empty or whitespace only'}}`.
+    - 1 MB paste (1,035,000 chars): HTTP 422 `{'error': {'code': 'VALIDATION_ERROR', 'message': 'content: Review content cannot exceed 50000 characters'}}`.
+    - Corrupt DOCX upload: HTTP 400 `{'error': {'code': 'HTTP_400', 'message': 'Corrupt file: The uploaded file has a .docx extension but lacks valid Word document headers.'}}`.
+    - Double-click accept: Click 1 HTTP 200 (revisions: 2), Click 2 HTTP 200 (revisions: 2, 0 duplicate revisions).
+    - Page refresh on every page: Verified persistent across Guidelines, Facts, Terminology, Reviews, and Review Detail.
   - Frontend static export (`NEXT_EXPORT=true npm run build`): Compiled and exported successfully with 0 errors.
+
