@@ -78,6 +78,11 @@ export interface ReviewFinding {
     | "abstain";
   evidence_source?: string;
   decision_status: "pending" | "accepted" | "edited" | "rejected";
+  reject_reason?: string;
+  reject_note?: string;
+  engine_source?: string;
+  is_ai_assisted?: boolean;
+  needs_human_look?: boolean;
   created_at: string;
 }
 
@@ -94,6 +99,8 @@ export interface DocumentRevision {
 export interface ReviewComment {
   id: number;
   user_id: number;
+  finding_id?: number;
+  comment_type?: "general" | "finding" | "ask_manager";
   user_name: string;
   user_role: string;
   message: string;
@@ -560,11 +567,15 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
 
     let action = "accept";
     let editedText = "";
+    let rejectReason = "";
+    let rejectNote = "";
     if (options.body && typeof options.body === "string") {
       try {
         const bodyObj = JSON.parse(options.body);
         action = bodyObj.action;
         editedText = bodyObj.edited_text;
+        rejectReason = bodyObj.reject_reason;
+        rejectNote = bodyObj.reject_note;
       } catch (_) {}
     }
 
@@ -574,6 +585,10 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
         finding.decision_status = action === "accept" ? "accepted" : action === "edit" ? "edited" : "rejected";
         if (action === "edit" && editedText) {
           finding.edited_correction = editedText;
+        }
+        if (action === "reject") {
+          finding.reject_reason = rejectReason || "False positive";
+          finding.reject_note = rejectNote;
         }
 
         // Apply replacement to review current_content
@@ -639,14 +654,21 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
     const review =
       mockStore.reviews.find((r) => r.id === reviewId) || mockStore.reviews[0];
     let message = "";
+    let findingId: number | undefined;
+    let commentType: "general" | "finding" | "ask_manager" = "general";
     if (options.body && typeof options.body === "string") {
       try {
-        message = JSON.parse(options.body).message;
+        const bodyObj = JSON.parse(options.body);
+        message = bodyObj.message;
+        findingId = bodyObj.finding_id;
+        commentType = bodyObj.comment_type || "general";
       } catch (_) {}
     }
     const newComment: ReviewComment = {
       id: Date.now(),
       user_id: mockStore.currentUser.id,
+      finding_id: findingId,
+      comment_type: commentType,
       user_name: mockStore.currentUser.full_name,
       user_role: mockStore.currentUser.role,
       message: message || "Comment added.",
@@ -654,6 +676,9 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
     };
     if (review) {
       review.comments.push(newComment);
+      if (commentType === "ask_manager") {
+        review.requires_human_attention = true;
+      }
     }
     return newComment as unknown as T;
   }
@@ -853,19 +878,37 @@ export const api = {
     reviewId: number,
     findingId: number,
     action: "accept" | "edit" | "reject",
-    editedText?: string
+    options?: {
+      editedText?: string;
+      rejectReason?: string;
+      rejectNote?: string;
+    }
   ) =>
     apiFetch<ContentReview>(
       `/api/reviews/${reviewId}/findings/${findingId}/action`,
       {
         method: "POST",
-        body: JSON.stringify({ action, edited_text: editedText }),
+        body: JSON.stringify({
+          action,
+          edited_text: options?.editedText,
+          reject_reason: options?.rejectReason,
+          reject_note: options?.rejectNote,
+        }),
       }
     ),
-  addComment: (reviewId: number, message: string) =>
+  addComment: (
+    reviewId: number,
+    message: string,
+    findingId?: number,
+    commentType?: "general" | "finding" | "ask_manager"
+  ) =>
     apiFetch<ReviewComment>(`/api/reviews/${reviewId}/comments`, {
       method: "POST",
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({
+        message,
+        finding_id: findingId,
+        comment_type: commentType || "general",
+      }),
     }),
   assignReviewer: (reviewId: number, reviewerId: number) =>
     apiFetch<any>(

@@ -15,6 +15,9 @@ import {
   FileText,
   AlertCircle,
   Scale,
+  HelpCircle,
+  Send,
+  CornerDownRight,
 } from "lucide-react";
 import { api, ContentReview, ReviewFinding, User } from "../lib/api";
 
@@ -36,6 +39,14 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [editModalFinding, setEditModalFinding] = useState<ReviewFinding | null>(null);
   const [customCorrection, setCustomCorrection] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [rejectModalFinding, setRejectModalFinding] = useState<ReviewFinding | null>(null);
+  const [rejectReason, setRejectReason] = useState("False positive");
+  const [rejectNote, setRejectNote] = useState("");
+  const [activeAskFindingId, setActiveAskFindingId] = useState<number | null>(null);
+  const [findingCommentMsg, setFindingCommentMsg] = useState("");
+  const [isAskManagerThread, setIsAskManagerThread] = useState(false);
+  const [threadSubmitting, setThreadSubmitting] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [selectedRevisionIndex, setSelectedRevisionIndex] = useState<number>(-1);
   const [decisionNotes, setDecisionNotes] = useState("");
@@ -60,16 +71,30 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
     }
   };
 
-  const handleAction = async (findingId: number, action: "accept" | "edit" | "reject", text?: string) => {
+  const handleAction = async (
+    findingId: number,
+    action: "accept" | "edit" | "reject",
+    options?: {
+      editedText?: string;
+      rejectReason?: string;
+      rejectNote?: string;
+    }
+  ) => {
     try {
       setActionLoading(findingId);
-      const updated = await api.handleFindingAction(reviewId, findingId, action, text);
+      setEditError(null);
+      const updated = await api.handleFindingAction(reviewId, findingId, action, options);
       setReview(updated);
       setSelectedRevisionIndex(updated.revisions.length - 1);
       setEditModalFinding(null);
+      setRejectModalFinding(null);
       if (onReviewUpdated) onReviewUpdated();
     } catch (err: any) {
-      alert(err.message || "Action failed");
+      if (action === "edit") {
+        setEditError(err.message || "Edit failed brand verification.");
+      } else {
+        alert(err.message || "Action failed");
+      }
     } finally {
       setActionLoading(null);
     }
@@ -84,6 +109,30 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
       setNewComment("");
     } catch (err: any) {
       alert(err.message || "Failed to post comment");
+    }
+  };
+
+  const handlePostFindingComment = async (findingId: number) => {
+    if (!findingCommentMsg.trim()) return;
+    try {
+      setThreadSubmitting(true);
+      const commentType = isAskManagerThread ? "ask_manager" : "finding";
+      const added = await api.addComment(reviewId, findingCommentMsg, findingId, commentType);
+      setReview((prev) =>
+        prev
+          ? {
+              ...prev,
+              requires_human_attention: isAskManagerThread ? true : prev.requires_human_attention,
+              comments: [...prev.comments, added],
+            }
+          : null
+      );
+      setFindingCommentMsg("");
+      setIsAskManagerThread(false);
+    } catch (err: any) {
+      alert(err.message || "Failed to post comment");
+    } finally {
+      setThreadSubmitting(false);
     }
   };
 
@@ -355,15 +404,32 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                   (review.comments ?? []).map((comm) => (
                     <div
                       key={comm.id}
-                      className="p-3 rounded-md bg-[#F7FAFA] border border-[#DCE7E8] text-xs space-y-1"
+                      className={`p-3 rounded-md text-xs space-y-1.5 border ${
+                        comm.comment_type === "ask_manager"
+                          ? "bg-[#FEFCE8] border-[#FEF08A]"
+                          : "bg-[#F7FAFA] border-[#DCE7E8]"
+                      }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-[#172C32]">
-                          {comm.user_name}{" "}
-                          <span className="text-[10px] font-mono text-[#328C91]">
-                            ({comm.user_role})
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-[#172C32]">
+                            {comm.user_name}{" "}
+                            <span className="text-[10px] font-mono text-[#328C91]">
+                              ({comm.user_role})
+                            </span>
                           </span>
-                        </span>
+                          {comm.comment_type === "ask_manager" && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] flex items-center gap-1">
+                              <HelpCircle className="w-3 h-3" />
+                              Ask Manager Thread
+                            </span>
+                          )}
+                          {comm.finding_id && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[#E0F2FE] text-[#0369A1] border border-[#BAE6FD]">
+                              Finding #{comm.finding_id}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-[#63777C]">
                           {new Date(comm.created_at).toLocaleTimeString([], {
                             hour: "2-digit",
@@ -434,7 +500,7 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                 >
                   {/* Finding Header */}
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span
                         className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
                           finding.severity === "critical"
@@ -459,6 +525,22 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                       >
                         {(finding.verification_status ?? "verified_clause").replace(/_/g, " ").toUpperCase()}
                       </span>
+
+                      {/* AI-Assisted Badge */}
+                      {(finding.is_ai_assisted || finding.engine_source === "ai") && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#F3E8FF] text-[#6B21A8] border border-[#E9D5FF] flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-[#9333EA]" />
+                          AI-Assisted
+                        </span>
+                      )}
+
+                      {/* Pre-Check Withheld Badge */}
+                      {(finding.needs_human_look || !finding.suggested_correction) && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-[#D97706]" />
+                          Needs a human look
+                        </span>
+                      )}
                     </div>
 
                     <span className="text-[10px] font-mono text-[#63777C]">
@@ -481,11 +563,11 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                       <Scale className="w-3.5 h-3.5 text-[#328C91]" />
                       <span>{finding.evidence_source || `Clause ${finding.clause_number}`}</span>
                     </div>
-                    <p className="text-[#172C32] leading-relaxed">{finding.explanation}</p>
+                    <p className="text-[#172C32] leading-relaxed whitespace-pre-line">{finding.explanation}</p>
                   </div>
 
                   {/* Suggested Correction */}
-                  {finding.suggested_correction && (
+                  {finding.suggested_correction ? (
                     <div className="p-2.5 bg-[#F0FDF4] border border-[#86EFAC] rounded text-[11px] space-y-1">
                       <span className="font-bold text-[#166534] block">
                         Verified Safe Suggestion:
@@ -494,28 +576,49 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                         "{finding.suggested_correction}"
                       </p>
                     </div>
-                  )}
+                  ) : finding.needs_human_look ? (
+                    <div className="p-2.5 bg-[#FFFBEB] border border-[#FDE68A] rounded text-[11px] space-y-1">
+                      <span className="font-bold text-[#92400E] block flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        Needs a human look
+                      </span>
+                      <p className="text-xs text-[#B45309]">
+                        Automated rewrite withheld to prevent unverified claims or new violations. Please use <strong>Edit</strong> to enter an approved phrasing, or <strong>Reject</strong> with reason.
+                      </p>
+                    </div>
+                  ) : null}
 
-                  {/* Action Buttons: Accept / Edit / Reject */}
+                  {/* Action Buttons: Accept / Edit / Reject / Ask Manager */}
                   {isPending ? (
-                    <div className="flex items-center gap-2 pt-1 border-t border-[#DCE7E8]">
-                      <button
-                        onClick={() => handleAction(finding.id, "accept")}
-                        disabled={actionLoading === finding.id}
-                        className="flex-1 py-1.5 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded shadow-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-                      >
-                        {actionLoading === finding.id ? (
-                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Check className="w-3.5 h-3.5" />
-                        )}
-                        <span>{actionLoading === finding.id ? "Applying..." : "Accept & Recheck"}</span>
-                      </button>
+                    <div className="flex items-center gap-2 pt-1 border-t border-[#DCE7E8] flex-wrap">
+                      {finding.suggested_correction && !finding.needs_human_look ? (
+                        <button
+                          onClick={() => handleAction(finding.id, "accept")}
+                          disabled={actionLoading === finding.id}
+                          className="flex-1 py-1.5 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded shadow-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          {actionLoading === finding.id ? (
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          <span>{actionLoading === finding.id ? "Applying..." : "Accept & Recheck"}</span>
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="flex-1 py-1.5 bg-[#F3F4F6] text-[#9CA3AF] text-xs font-semibold rounded border border-[#E5E7EB] cursor-not-allowed"
+                          title="Automated rewrite withheld. Please edit or reject."
+                        >
+                          Rewrite Withheld (Use Edit)
+                        </button>
+                      )}
 
                       <button
                         onClick={() => {
                           setEditModalFinding(finding);
-                          setCustomCorrection(finding.suggested_correction || "");
+                          setCustomCorrection(finding.suggested_correction || finding.original_text || "");
+                          setEditError(null);
                         }}
                         disabled={actionLoading === finding.id}
                         className="px-3 py-1.5 bg-[#F7FAFA] hover:bg-[#EAF2F3] text-[#172C32] text-xs font-semibold rounded border border-[#DCE7E8] transition-colors flex items-center gap-1"
@@ -525,24 +628,157 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                       </button>
 
                       <button
-                        onClick={() => handleAction(finding.id, "reject")}
+                        onClick={() => {
+                          setRejectModalFinding(finding);
+                          setRejectReason("False positive");
+                          setRejectNote("");
+                        }}
                         disabled={actionLoading === finding.id}
-                        className="p-1.5 hover:bg-[#FEE2E2] rounded text-[#B91C1C] transition-colors"
+                        className="px-3 py-1.5 hover:bg-[#FEE2E2] rounded text-[#B91C1C] text-xs font-semibold border border-[#FCA5A5]/40 transition-colors flex items-center gap-1"
                         title="Reject suggestion"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-3.5 h-3.5" />
+                        <span>Reject</span>
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          setActiveAskFindingId(activeAskFindingId === finding.id ? null : finding.id)
+                        }
+                        className="px-2.5 py-1.5 bg-[#F7FAFA] hover:bg-[#EAF2F3] text-[#205E65] text-xs font-semibold rounded border border-[#DCE7E8] transition-colors flex items-center gap-1 ml-auto"
+                        title="Discuss or Ask Manager"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5 text-[#328C91]" />
+                        <span>Ask Manager</span>
                       </button>
                     </div>
                   ) : (
-                    <div className="text-[11px] font-mono text-[#63777C] pt-1 border-t border-[#DCE7E8] flex items-center gap-1">
-                      <span className="font-bold uppercase text-[#328C91]">
-                        Decision: {finding.decision_status}
-                      </span>
-                      {finding.edited_correction && (
-                        <span>• Custom: "{finding.edited_correction}"</span>
-                      )}
+                    <div className="text-[11px] font-mono text-[#63777C] pt-1 border-t border-[#DCE7E8] flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold uppercase text-[#328C91]">
+                          Decision: {finding.decision_status}
+                        </span>
+                        {finding.edited_correction && (
+                          <span>• Custom: "{finding.edited_correction}"</span>
+                        )}
+                        {finding.reject_reason && (
+                          <span className="text-[#B91C1C]">
+                            • Reason: {finding.reject_reason}
+                            {finding.reject_note && ` ("${finding.reject_note}")`}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() =>
+                          setActiveAskFindingId(activeAskFindingId === finding.id ? null : finding.id)
+                        }
+                        className="text-[11px] text-[#328C91] hover:underline flex items-center gap-1"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        Thread
+                      </button>
                     </div>
                   )}
+
+                  {/* Inline Finding Comments & Ask Manager Thread */}
+                  {(() => {
+                    const findingComments = (review.comments ?? []).filter(
+                      (c) => c.finding_id === finding.id
+                    );
+                    const isOpen = activeAskFindingId === finding.id;
+                    if (!isOpen && findingComments.length === 0) return null;
+
+                    return (
+                      <div className="mt-2 pt-2 border-t border-[#DCE7E8] bg-[#F7FAFA] -mx-4 -mb-4 p-3 rounded-b-lg space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-[#172C32]">
+                          <span className="flex items-center gap-1 text-[#205E65]">
+                            <MessageSquare className="w-3.5 h-3.5 text-[#328C91]" />
+                            Finding Thread ({findingComments.length})
+                          </span>
+                          {!isOpen && (
+                            <button
+                              onClick={() => setActiveAskFindingId(finding.id)}
+                              className="text-[10px] text-[#328C91] hover:underline font-semibold"
+                            >
+                              + Add Note / Ask Manager
+                            </button>
+                          )}
+                        </div>
+
+                        {findingComments.map((fc) => (
+                          <div
+                            key={fc.id}
+                            className={`p-2 rounded text-[11px] border ${
+                              fc.comment_type === "ask_manager"
+                                ? "bg-[#FEFCE8] border-[#FEF08A] text-[#92400E]"
+                                : "bg-white border-[#DCE7E8] text-[#172C32]"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between font-semibold mb-0.5">
+                              <span className="flex items-center gap-1">
+                                {fc.user_name} ({fc.user_role})
+                                {fc.comment_type === "ask_manager" && (
+                                  <span className="px-1 py-0.2 bg-[#FDE68A] text-[#92400E] rounded text-[9px] font-bold">
+                                    Manager Request
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-[9px] text-[#63777C]">
+                                {new Date(fc.created_at).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                            <p>{fc.message}</p>
+                          </div>
+                        ))}
+
+                        {isOpen && (
+                          <div className="pt-2 border-t border-[#DCE7E8]/60 space-y-2">
+                            <textarea
+                              rows={2}
+                              value={findingCommentMsg}
+                              onChange={(e) => setFindingCommentMsg(e.target.value)}
+                              placeholder="Write a message to discuss this finding or ask a manager..."
+                              className="w-full p-2 text-xs border border-[#DCE7E8] rounded bg-white focus:outline-none focus:border-[#328C91]"
+                            />
+                            <div className="flex items-center justify-between">
+                              <label className="flex items-center gap-1.5 text-[11px] text-[#172C32] cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={isAskManagerThread}
+                                  onChange={(e) => setIsAskManagerThread(e.target.checked)}
+                                  className="rounded text-[#328C91] focus:ring-0"
+                                />
+                                <span className="font-semibold text-[#92400E]">
+                                  Flag as "Ask Manager" Thread
+                                </span>
+                              </label>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveAskFindingId(null)}
+                                  className="px-2 py-1 text-[11px] text-[#63777C]"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={threadSubmitting || !findingCommentMsg.trim()}
+                                  onClick={() => handlePostFindingComment(finding.id)}
+                                  className="px-3 py-1 bg-[#328C91] hover:bg-[#205E65] text-white text-[11px] font-semibold rounded flex items-center gap-1 disabled:opacity-50 shadow-sm"
+                                >
+                                  <Send className="w-3 h-3" />
+                                  <span>{threadSubmitting ? "Posting..." : "Post"}</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })
@@ -556,41 +792,111 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
           <div className="bg-white rounded-lg shadow-elevated border border-[#DCE7E8] max-w-md w-full p-6 space-y-4">
             <h3 className="text-sm font-bold text-[#172C32]">Edit Correction</h3>
             <p className="text-xs text-[#63777C]">
-              Modify the proposed text before accepting. The document will be re-analyzed to verify no new violations are introduced.
+              Type a custom replacement for this finding. Your text will be automatically re-verified by the rule engine to confirm it complies with brand guidelines and approved facts.
             </p>
-            <div className="space-y-2">
+            {editError && (
+              <div className="p-2.5 bg-[#FEE2E2] border border-[#FCA5A5] rounded text-xs text-[#991B1B]">
+                {editError}
+              </div>
+            )}
+            <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-[#63777C] uppercase">
-                Original Text
+                Original Flagged Text
               </label>
               <div className="p-2 bg-[#FEE2E2] text-xs font-mono text-[#991B1B] rounded">
                 {editModalFinding.original_text}
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-[#63777C] uppercase">
-                Custom Replacement
+                Custom Replacement Text
               </label>
               <textarea
                 rows={3}
                 value={customCorrection}
                 onChange={(e) => setCustomCorrection(e.target.value)}
+                placeholder="Type your compliant replacement text..."
                 className="w-full p-2.5 text-xs font-mono border border-[#DCE7E8] rounded focus:outline-none focus:border-[#328C91]"
               />
             </div>
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
-                onClick={() => setEditModalFinding(null)}
+                onClick={() => {
+                  setEditModalFinding(null);
+                  setEditError(null);
+                }}
                 className="px-3 py-1.5 text-xs font-semibold text-[#63777C]"
               >
                 Cancel
               </button>
               <button
                 onClick={() =>
-                  handleAction(editModalFinding.id, "edit", customCorrection)
+                  handleAction(editModalFinding.id, "edit", { editedText: customCorrection })
                 }
-                className="px-4 py-1.5 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded shadow-sm"
+                disabled={actionLoading === editModalFinding.id || !customCorrection.trim()}
+                className="px-4 py-1.5 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded shadow-sm disabled:opacity-50"
               >
-                Apply & Re-analyze
+                {actionLoading === editModalFinding.id ? "Re-verifying..." : "Apply & Re-verify"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Finding Modal */}
+      {rejectModalFinding && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-elevated border border-[#DCE7E8] max-w-md w-full p-6 space-y-4">
+            <h3 className="text-sm font-bold text-[#172C32]">Reject Finding</h3>
+            <p className="text-xs text-[#63777C]">
+              Specify the rationale for rejecting this governance finding. The reason will be stored in the permanent audit trail.
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-[#63777C] uppercase">
+                Rejection Reason (Required)
+              </label>
+              <select
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                className="w-full p-2 text-xs border border-[#DCE7E8] rounded bg-white focus:outline-none focus:border-[#328C91]"
+              >
+                <option value="False positive">False positive</option>
+                <option value="Approved exception">Approved exception</option>
+                <option value="Contextually permitted">Contextually permitted</option>
+                <option value="Will rephrase manually">Will rephrase manually</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-[#63777C] uppercase">
+                Optional Notes / Context
+              </label>
+              <textarea
+                rows={2}
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                placeholder="Optional clarification for the audit log..."
+                className="w-full p-2 text-xs border border-[#DCE7E8] rounded focus:outline-none focus:border-[#328C91]"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setRejectModalFinding(null)}
+                className="px-3 py-1.5 text-xs font-semibold text-[#63777C]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() =>
+                  handleAction(rejectModalFinding.id, "reject", {
+                    rejectReason,
+                    rejectNote,
+                  })
+                }
+                disabled={actionLoading === rejectModalFinding.id}
+                className="px-4 py-1.5 bg-[#B91C1C] hover:bg-[#991B1B] text-white text-xs font-semibold rounded shadow-sm disabled:opacity-50"
+              >
+                {actionLoading === rejectModalFinding.id ? "Rejecting..." : "Confirm Rejection"}
               </button>
             </div>
           </div>
