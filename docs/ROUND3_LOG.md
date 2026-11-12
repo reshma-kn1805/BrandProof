@@ -153,5 +153,38 @@ This document tracks phase-by-phase execution, timestamps, changes, and verifica
   - Playwright E2E (`tests/test_playwright_e2e.py`): 1 passed in 12.07s.
   - Frontend static export (`NEXT_EXPORT=true npm run build`): Compiled and exported successfully with 0 errors (4/4 pages exported).
 
+---
+
+## [Phase 6] Improvement 1: Guideline-Health Intelligence & Backtesting
+- **Timestamp**: 2026-11-12 21:50:00 IST
+- **Status**: Completed & Verified
+- **Key Changes**:
+  - `backend/models.py` & `backend/database.py`:
+    - Added `decision_user_id` (ForeignKey to `users.id`) and `decision_at` (DateTime) to `ReviewFinding` to capture decision telemetry.
+    - Added `is_demo_history` (Boolean, default False) to `ContentReview` to cleanly isolate seeded historical benchmark reviews from live creator submissions.
+    - Updated `migrate_columns()` with idempotent ALTER TABLE statements for SQLite and PostgreSQL.
+  - `backend/routers/reviews_router.py`:
+    - In `decision_on_finding`, recorded `decision_user_id = current_user.id` and `decision_at = datetime.datetime.utcnow()` alongside decision status, reason, and note.
+  - `backend/guideline_health.py` (new):
+    - `compute_guideline_health()`: Calculates per-clause override rate (`(rejected + edited) / total * 100`). Identifies "Possibly unclear" clauses ($\ge 6$ decisions and $\ge 50\%$ override rate). Detects "Possible conflict" clause pairs with overlapping text spans across $\ge 3$ distinct reviews.
+    - `backtest_clause_reword()`: Evaluates proposed clause reword against historical content drafts, computing added, removed, and unchanged violations with concrete diff examples and mandatory disclaimer: *"Backtesting covers deterministic rule-based checks only against historical content drafts."*
+    - `publish_revised_clause()`: Archives previous version, increments version number to $N+1$, clones all clauses with the updated target clause, and appends a tamper-evident audit log entry `PUBLISH_GUIDELINE_VERSION`.
+    - `seed_demo_history()`: Deterministically seeds 8 benchmark reviews for Clause 5.2 (Media Alt Text) with 2 accepted, 4 rejected with stored reasons, 2 edited ($75\%$ override rate $\ge 50\%$) and 4 reviews where Clause 3.4 and Clause 3.6 overlap on text `"India's #1 guaranteed health mix"`.
+  - `backend/seed.py`: Updated to call `seed_demo_history` when seeding the Nila Foods workspace.
+  - `backend/schemas.py`: Added Pydantic schemas for `GuidelineHealthKPIs`, `GuidelineHealthClause`, `GuidelineHealthConflict`, `GuidelineHealthOut`, `ClauseBacktestRequest`, `ClauseBacktestOut`, `ClausePublishRevisionRequest`, and `ClausePublishRevisionOut`.
+  - `backend/routers/guidelines_router.py`: Exposed `GET /api/guidelines/health`, `POST /clauses/{id}/backtest`, `POST /clauses/{id}/publish-revision`, and `POST /seed-demo-history`.
+  - `frontend/src/lib/api.ts`: Added TypeScript interfaces, mock handlers in `handleMockRequest`, and API methods (`getGuidelineHealth`, `backtestClause`, `publishRevisedClause`, `seedDemoHistory`).
+  - `frontend/src/components/GuidelineHealthView.tsx` (new): Full Guideline Health Intelligence interface with demo history toggle, 4 KPI cards, Unclear Clauses alert banner, Conflicting Pairs breakdown with quotation excerpts and review IDs, Clause Performance Table sorted by override rate, and interactive Reword & Backtest / Publish Version $N+1$ modal.
+  - `frontend/src/components/Sidebar.tsx` & `frontend/src/app/page.tsx`: Added `guideline_health` to `ActiveView` and sidebar navigation under Governance Repository.
+  - `tests/test_phase6_features.py` (new):
+    - Unit test for override-rate calculation with boundary inputs (5 decisions 60% -> insufficient data; 6 decisions 50% -> unclear; 6 decisions 16.7% -> healthy).
+    - Unit test for conflict detection logic ($\ge 3$ distinct reviews).
+    - Full E2E "Done when" test: Manager accesses Guideline Health, verifies unclear clause ($\ge 6$ decisions, $\ge 50\%$ override) and conflicting pair ($\ge 3$ reviews), executes backtest, publishes revision $N+1$, verifies version comparison diff, and validates audit ledger integrity.
+- **Verification Results**:
+  - `python -m pytest tests -q`: 56 passed, 1173 warnings in 45.88s.
+  - `python -m pytest tests/test_phase6_features.py -q`: 3 passed in 3.51s.
+  - Frontend static build (`NEXT_EXPORT=true npm run build`): Compiled and exported successfully with 0 errors (4/4 static pages).
+
+
 
 
