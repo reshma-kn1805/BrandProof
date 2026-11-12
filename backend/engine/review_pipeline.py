@@ -4,6 +4,7 @@ from backend.engine.evidence_retriever import EvidenceRetriever
 from backend.engine.deterministic_engine import DeterministicEngine
 from backend.engine.ai_review_engine import AIReviewEngine
 from backend.engine.verification_layer import IndependentVerificationLayer
+from backend.engine.suggestion_prechecker import pre_check_suggestions
 
 class ReviewPipeline:
     """
@@ -13,6 +14,7 @@ class ReviewPipeline:
     Stage 3: Evidence Retrieval
     Stage 4: AI-Assisted Contextual Review
     Stage 5: Independent Python Verification Layer
+    Stage 5.5: Suggestion Pre-Check & Human Attention Routing
     Stage 6: Scoring, Abstention, & Routing
     """
     def __init__(self, db: Session, organization_id: int):
@@ -28,17 +30,31 @@ class ReviewPipeline:
         # Stage 2: Deterministic Rule Checks
         deterministic_engine = DeterministicEngine(evidence_ctx)
         deterministic_findings = deterministic_engine.scan(content)
+        for df in deterministic_findings:
+            df["engine_source"] = "deterministic"
+            df["is_ai_assisted"] = False
 
         # Stage 4: AI-Assisted Review (Contextual tone, intent, guarantees)
         ai_engine = AIReviewEngine(evidence_ctx)
         ai_res = await ai_engine.analyze(content)
         ai_findings = ai_res.get("findings", [])
+        for af in ai_findings:
+            af["engine_source"] = "ai"
+            af["is_ai_assisted"] = True
 
         # Combine candidates
         raw_candidates = deterministic_findings + ai_findings
 
         # Stage 5 & 6: Independent Verification Layer & Abstention
         verified_findings = self.verifier.verify_findings(raw_candidates, content)
+
+        # Stage 5.5: Pre-Check Suggested Corrections
+        verified_findings = pre_check_suggestions(
+            verified_findings,
+            content,
+            evidence_ctx,
+            deterministic_engine
+        )
 
         # Calculate Compliance Score (100 base, deductions based on severity)
         score = 100.0
@@ -55,7 +71,7 @@ class ReviewPipeline:
             else:
                 score -= 5.0
 
-            if f.get("verification_status") in ["pending_human_review", "expired_fact_detected"]:
+            if f.get("verification_status") in ["pending_human_review", "expired_fact_detected"] or f.get("needs_human_look"):
                 requires_attention = True
 
         score = max(0.0, round(score, 1))

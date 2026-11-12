@@ -41,7 +41,18 @@ class DeterministicEngine:
                     if in_approved:
                         continue
 
+                    start_idx = match.start()
+                    end_idx = match.end()
                     matched_text = match.group(0)
+
+                    # Phrase-level expansion: avoid doubling brand name prefix (e.g. 'Nila Millet-Mix')
+                    if preferred and " " in preferred:
+                        pref_first_word = preferred.split()[0]
+                        prefix_match = re.search(r'\b' + re.escape(pref_first_word) + r'\s+$', content[:start_idx], re.IGNORECASE)
+                        if prefix_match:
+                            start_idx = prefix_match.start()
+                            matched_text = content[start_idx:end_idx]
+
                     if matched_text.strip().lower() == preferred.strip().lower():
                         continue
 
@@ -75,7 +86,20 @@ class DeterministicEngine:
         for pat_str, label in superlative_patterns:
             matches = list(re.finditer(pat_str, content, re.IGNORECASE))
             for match in matches:
+                start_idx = match.start()
+                end_idx = match.end()
                 matched_text = match.group(0)
+
+                # Phrase-level expansion: if followed by 'healthy breakfast' or 'breakfast', expand span to avoid repetition
+                post_slice = content[end_idx:]
+                phrase_match = re.match(r'^\s+(healthy\s+breakfast|wholesome\s+breakfast|breakfast)', post_slice, re.IGNORECASE)
+                if phrase_match:
+                    end_idx = end_idx + phrase_match.end()
+                    matched_text = content[start_idx:end_idx]
+                    suggested_corr = "a healthy breakfast"
+                else:
+                    suggested_corr = "a healthy breakfast"
+
                 clause_34 = self.clauses.get("3.4", {})
 
                 # If claim connects to ranking (India's #1 or Top 3), link with Fact F-07 which expired Dec 31, 2025
@@ -93,7 +117,7 @@ class DeterministicEngine:
                             f"However, Fact F-07 ('Top 3 in breakfast cereal category') expired on 31 December 2025 and cannot be used as valid evidence. "
                             f"Clause 3.4 forbids ranking or superlative claims without current, verified third-party audit."
                         ),
-                        "suggested_correction": "a healthy breakfast",
+                        "suggested_correction": suggested_corr,
                         "confidence": 1.0,
                         "verification_status": "expired_fact_detected" if is_f07_expired else "verified_fact",
                         "evidence_source": f"Clause 3.4 (Superlative claims) & Fact F-07 (Expired: {fact_07.get('expiry_date')})",
@@ -112,7 +136,7 @@ class DeterministicEngine:
                             f"The phrase '{matched_text}' constitutes a superlative claim. "
                             f"Under Clause 3.4, superlative claims require verifiable, current certification."
                         ),
-                        "suggested_correction": "trusted breakfast",
+                        "suggested_correction": suggested_corr,
                         "confidence": 0.95,
                         "verification_status": "verified_clause",
                         "evidence_source": "Clause 3.4: Superlative Claims",
@@ -121,8 +145,8 @@ class DeterministicEngine:
 
         # 3. Health & Medical Guarantee Claims (Clause 3.6)
         health_patterns = [
-            r"(guaranteed\s+to\s+cut\s+sugar\s+cravings|cuts\s+sugar\s+cravings|cure[s]?\s+diabetes|100%\s+guaranteed\s+health)",
-            r"(prevents\s+heart\s+disease|guaranteed\s+weight\s+loss)",
+            r"(guaranteed\s+to\s+cut\s+sugar\s+cravings|cuts\s+sugar\s+cravings|cure[s]?\s+diabetes|100%\s+guaranteed\s+health)[\.]?",
+            r"(prevents\s+heart\s+disease|guaranteed\s+weight\s+loss)[\.]?",
         ]
         clause_36 = self.clauses.get("3.6", {})
         fact_12 = self.facts.get("F-12")
@@ -133,6 +157,15 @@ class DeterministicEngine:
                 matched_text = match.group(0)
                 # Correction using approved valid Fact F-12 ("Made with 5 whole millets")
                 f12_statement = fact_12.get("statement", "made with 5 whole millets") if fact_12 else "made with whole millets"
+                
+                # Check sentence capitalization context
+                is_sentence_start = match.start() == 0 or bool(re.search(r'[\.!\?]\s*$', content[:match.start()]))
+                has_period = matched_text.endswith(".")
+                
+                corr = "Made with 5 whole millets" if is_sentence_start else "made with 5 whole millets"
+                if has_period:
+                    corr += "."
+
                 findings.append({
                     "title": f"Unverified Health Guarantee: '{matched_text}'",
                     "original_text": matched_text,
@@ -146,7 +179,7 @@ class DeterministicEngine:
                         f"Under Clause 3.6 (Health claims), therapeutic guarantees are prohibited without regulatory approval. "
                         f"Recommend replacing with verified ingredient fact F-12 ('{f12_statement}')."
                     ),
-                    "suggested_correction": f"made with 5 whole millets",
+                    "suggested_correction": corr,
                     "confidence": 1.0,
                     "verification_status": "verified_clause",
                     "evidence_source": "Clause 3.6: Health Claims",
@@ -162,6 +195,7 @@ class DeterministicEngine:
             matches = list(re.finditer(pat_str, content, re.IGNORECASE))
             for match in matches:
                 matched_text = match.group(0)
+                corr = "Discover our blend." if matched_text.endswith((".", "!")) else "Discover our blend"
                 findings.append({
                     "title": f"Tone Inconsistency: Aggressive Sales Call-to-Action '{matched_text}'",
                     "original_text": matched_text,
@@ -174,7 +208,7 @@ class DeterministicEngine:
                         f"The aggressive urgency phrase '{matched_text}' conflicts with Brand Tone Guideline 2.1. "
                         f"Nila Foods emphasizes grounded, educational, and warm communication rather than high-pressure sales triggers."
                     ),
-                    "suggested_correction": "Discover our blend.",
+                    "suggested_correction": corr,
                     "confidence": 0.92,
                     "verification_status": "verified_clause",
                     "evidence_source": "Clause 2.1: Brand Tone",
