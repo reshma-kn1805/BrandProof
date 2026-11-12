@@ -282,6 +282,8 @@ async def handle_finding_action(
     else:
         raise HTTPException(status_code=400, detail="Invalid action. Must be accept, edit, or reject.")
 
+    finding.decision_user_id = current_user.id
+    finding.decision_at = datetime.datetime.utcnow()
     db.flush()
 
     # If text changed, update content, create new revision, and re-review

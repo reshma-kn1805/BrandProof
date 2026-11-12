@@ -510,3 +510,101 @@ class WorkspaceSettingsOut(BaseModel):
 class WorkspaceSettingsUpdate(BaseModel):
     confidential_mode_default: Optional[bool] = None
     confidential_terms: Optional[List[str]] = None
+
+# --- Phase 6: Guideline Health & Intelligence Schemas ---
+class GuidelineHealthKPIs(BaseModel):
+    total_clauses: int
+    unclear_clauses_count: int
+    conflicting_pairs_count: int
+    global_override_rate: float
+    total_decisions_recorded: int
+    has_demo_history: bool = False
+    includes_demo_history: bool = True
+
+class GuidelineHealthClause(BaseModel):
+    clause_id: int
+    clause_number: str
+    title: str
+    description: str
+    category: str
+    severity: str
+    total_triggered: int
+    total_decisions: int
+    accepted_count: int
+    edited_count: int
+    rejected_count: int
+    override_rate: float
+    reasons_breakdown: Dict[str, int]
+    health_status: str  # "unclear", "healthy", "insufficient_data"
+    is_unclear: bool
+
+class GuidelineHealthConflict(BaseModel):
+    clause_a_number: str
+    clause_a_title: str
+    clause_b_number: str
+    clause_b_title: str
+    reviews_count: int
+    review_ids: List[int]
+    example_quotations: List[Dict[str, Any]]
+
+class GuidelineHealthOut(BaseModel):
+    kpis: GuidelineHealthKPIs
+    clauses: List[GuidelineHealthClause]
+    conflicts: List[GuidelineHealthConflict]
+
+class ClauseBacktestRequest(BaseModel):
+    proposed_title: str
+    proposed_description: str
+    proposed_severity: Optional[str] = "warning"
+    proposed_rules: Optional[Dict[str, Any]] = None
+    include_demo_history: Optional[bool] = True
+
+    @field_validator("proposed_title")
+    @classmethod
+    def val_bt_title(cls, v: str) -> str:
+        return _validate_trimmed(v, "Proposed title", max_len=255, required=True) or ""
+
+    @field_validator("proposed_description")
+    @classmethod
+    def val_bt_desc(cls, v: str) -> str:
+        return _validate_trimmed(v, "Proposed description", max_len=5000, required=True) or ""
+
+class ClauseBacktestOut(BaseModel):
+    clause_number: str
+    original_title: str
+    proposed_title: str
+    reviews_analyzed: int
+    summary: Dict[str, int]
+    examples: Dict[str, List[Any]]
+    notice: str
+
+class ClausePublishRevisionRequest(BaseModel):
+    changelog: str
+    title: str
+    description: str
+    severity: Optional[str] = "warning"
+    rules_json: Optional[Dict[str, Any]] = None
+
+    @field_validator("changelog")
+    @classmethod
+    def val_pub_changelog(cls, v: str) -> str:
+        return _validate_trimmed(v, "Changelog", max_len=1000, required=True) or ""
+
+    @field_validator("title")
+    @classmethod
+    def val_pub_title(cls, v: str) -> str:
+        return _validate_trimmed(v, "Title", max_len=255, required=True) or ""
+
+    @field_validator("description")
+    @classmethod
+    def val_pub_desc(cls, v: str) -> str:
+        return _validate_trimmed(v, "Description", max_len=5000, required=True) or ""
+
+class ClausePublishRevisionOut(BaseModel):
+    success: bool
+    new_version_id: int
+    version_number: str
+    changelog: str
+    clause_id: Optional[int] = None
+    clause_number: str
+    document_id: int

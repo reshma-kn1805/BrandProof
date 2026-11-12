@@ -163,6 +163,7 @@ class ContentReview(Base):
     confidential_mode = Column(Boolean, default=False)
     redaction_summary = Column(JSON, nullable=True)
     report_fingerprint = Column(String(64), nullable=True)
+    is_demo_history = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -211,6 +212,8 @@ class ReviewFinding(Base):
     # verified_clause, verified_fact, expired_fact_detected, pending_human_review, abstain
     evidence_source = Column(Text, nullable=True)
     decision_status = Column(String(50), default="pending")  # pending, accepted, edited, rejected
+    decision_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    decision_at = Column(DateTime, nullable=True)
     reject_reason = Column(String(100), nullable=True)
     reject_note = Column(Text, nullable=True)
     engine_source = Column(String(50), default="deterministic")  # deterministic, ai
@@ -222,6 +225,7 @@ class ReviewFinding(Base):
     clause = relationship("GuidelineClause")
     fact = relationship("ApprovedFact")
     comments = relationship("ReviewComment", back_populates="finding")
+    decision_user = relationship("User", foreign_keys=[decision_user_id])
 
 
 class ReviewComment(Base):

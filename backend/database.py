@@ -47,6 +47,8 @@ def migrate_columns(target_engine=None):
                     ("engine_source", "VARCHAR(50) DEFAULT 'deterministic'"),
                     ("is_ai_assisted", "BOOLEAN DEFAULT 0"),
                     ("needs_human_look", "BOOLEAN DEFAULT 0"),
+                    ("decision_user_id", "INTEGER"),
+                    ("decision_at", "DATETIME"),
                 ]
                 for col_name, col_type in new_rf_cols:
                     if col_name not in rf_cols:
@@ -78,6 +80,7 @@ def migrate_columns(target_engine=None):
                     ("confidential_mode", "BOOLEAN DEFAULT 0"),
                     ("redaction_summary", "TEXT"),
                     ("report_fingerprint", "VARCHAR(64)"),
+                    ("is_demo_history", "BOOLEAN DEFAULT 0"),
                 ]
                 for col_name, col_type in new_cr_cols:
                     if col_name not in cr_cols:
@@ -98,7 +101,7 @@ def migrate_columns(target_engine=None):
         try:
             from backend.audit_chain import backfill_audit_chain
             from sqlalchemy.orm import Session
-            with Session(engine) as session:
+            with Session(eng) as session:
                 backfill_audit_chain(session)
         except Exception as e:
             print(f"[Migration] Audit backfill notice: {e}")

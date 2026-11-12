@@ -7,9 +7,15 @@ from backend.models import User, GuidelineDocument, GuidelineVersion, GuidelineC
 from backend.auth import get_current_user, require_roles
 from backend.schemas import (
     GuidelineDocumentOut, GuidelineClauseOut, GuidelineClauseCreate,
-    GuidelineClauseUpdate, GuidelineVersionOut
+    GuidelineClauseUpdate, GuidelineVersionOut,
+    GuidelineHealthOut, ClauseBacktestRequest, ClauseBacktestOut,
+    ClausePublishRevisionRequest, ClausePublishRevisionOut
 )
 from backend.document_parser import DocumentParser
+from backend.guideline_health import (
+    compute_guideline_health, backtest_clause_reword,
+    publish_revised_clause, seed_demo_history
+)
 
 router = APIRouter(prefix="/api/guidelines", tags=["Brand Guidelines"])
 
@@ -257,4 +263,65 @@ def compare_versions(
         "v2": v2,
         "diffs": diffs
     }
+
+# --- Phase 6: Guideline Health & Intelligence Endpoints ---
+
+@router.get("/health", response_model=GuidelineHealthOut)
+def get_guideline_health(
+    include_demo_history: bool = True,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return compute_guideline_health(db, current_user.organization_id, include_demo_history=include_demo_history)
+
+@router.post("/clauses/{clause_id}/backtest", response_model=ClauseBacktestOut)
+def backtest_clause(
+    clause_id: int,
+    payload: ClauseBacktestRequest,
+    current_user: User = Depends(require_roles(["Admin", "Manager"])),
+    db: Session = Depends(get_db)
+):
+    try:
+        return backtest_clause_reword(
+            db=db,
+            organization_id=current_user.organization_id,
+            clause_id=clause_id,
+            proposed_title=payload.proposed_title,
+            proposed_description=payload.proposed_description,
+            proposed_severity=payload.proposed_severity or "warning",
+            proposed_rules=payload.proposed_rules,
+            include_demo_history=payload.include_demo_history if payload.include_demo_history is not None else True
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.post("/clauses/{clause_id}/publish-revision", response_model=ClausePublishRevisionOut)
+def publish_revision(
+    clause_id: int,
+    payload: ClausePublishRevisionRequest,
+    current_user: User = Depends(require_roles(["Admin", "Manager"])),
+    db: Session = Depends(get_db)
+):
+    try:
+        return publish_revised_clause(
+            db=db,
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            clause_id=clause_id,
+            changelog=payload.changelog,
+            title=payload.title,
+            description=payload.description,
+            severity=payload.severity or "warning",
+            rules_json=payload.rules_json
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.post("/seed-demo-history")
+def trigger_seed_demo_history(
+    current_user: User = Depends(require_roles(["Admin", "Manager"])),
+    db: Session = Depends(get_db)
+):
+    count = seed_demo_history(db, current_user.organization_id)
+    return {"status": "ok", "seeded_reviews": count}
 

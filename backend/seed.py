@@ -465,6 +465,13 @@ def seed_database(db: Session = None):
             db.add(clean_review)
             db.commit()
 
+        # Seed historical reviews for Guideline Health intelligence
+        try:
+            from backend.guideline_health import seed_demo_history
+            seed_demo_history(db, org.id)
+        except Exception as he:
+            print(f"[Seed] Guideline health demo history note: {he}")
+
         # Ensure audit chain is initialized and hashed
         try:
             from backend.audit_chain import backfill_audit_chain
