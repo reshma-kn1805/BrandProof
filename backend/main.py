@@ -1,4 +1,5 @@
 import os
+from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -62,6 +63,21 @@ app.include_router(audit_router.router)
 app.include_router(users_router.router)
 app.include_router(settings_router.router)
 
+# Phase 5: Verification alias for external report checkers
+@app.get("/api/reports/verify", response_model=reviews_router.ReportVerifyOut)
+def reports_verify_alias_get(
+    query: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    return reviews_router._do_verify_report(query, db)
+
+@app.post("/api/reports/verify", response_model=reviews_router.ReportVerifyOut)
+def reports_verify_alias_post(
+    payload: reviews_router.ReportVerifyRequest,
+    db: Session = Depends(get_db)
+):
+    return reviews_router._do_verify_report(payload.query, db)
+
 # --- Global Exception Handlers Returning {"error": {"code": "...", "message": "..."}} ---
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -118,6 +134,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.on_event("startup")
 def startup_event():
+    # If in test environment, conftest initializes the isolated temporary database
+    if os.getenv("ENV") == "test":
+        return
     # Create tables and auto-seed demo workspace
     Base.metadata.create_all(bind=engine)
     from backend.database import migrate_columns

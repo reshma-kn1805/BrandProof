@@ -1,9 +1,11 @@
 import os
-from fastapi import APIRouter, Depends
+import json
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User, Organization
-from backend.auth import get_current_user
+from backend.auth import get_current_user, require_roles
+from backend.schemas import WorkspaceSettingsUpdate
 
 router = APIRouter(prefix="/api/settings", tags=["Settings & AI Privacy"])
 
@@ -13,15 +15,46 @@ def get_workspace_settings(
     db: Session = Depends(get_db)
 ):
     org = current_user.organization
+    raw_terms = getattr(org, "confidential_terms", [])
+    terms_list = []
+    if isinstance(raw_terms, str):
+        try:
+            terms_list = json.loads(raw_terms)
+        except Exception:
+            terms_list = []
+    elif isinstance(raw_terms, list):
+        terms_list = raw_terms
+
     return {
         "organization_id": org.id,
         "name": org.name,
         "slug": org.slug,
         "description": org.description,
         "is_fictional_demo": org.is_fictional_demo,
+        "confidential_mode_default": bool(getattr(org, "confidential_mode_default", False)),
+        "confidential_terms": terms_list,
         "created_at": org.created_at,
         "active_workspace": org.name,
         "tenant_isolation_mode": "Strict Row-Level & Foreign-Key Scoping",
+    }
+
+@router.patch("/workspace")
+def update_workspace_settings(
+    payload: WorkspaceSettingsUpdate,
+    current_user: User = Depends(require_roles(["Manager", "Admin"])),
+    db: Session = Depends(get_db)
+):
+    org = current_user.organization
+    if payload.confidential_mode_default is not None:
+        org.confidential_mode_default = payload.confidential_mode_default
+    if payload.confidential_terms is not None:
+        org.confidential_terms = payload.confidential_terms
+    db.commit()
+    db.refresh(org)
+    return {
+        "confidential_mode_default": org.confidential_mode_default,
+        "confidential_terms": org.confidential_terms,
+        "message": "Workspace privacy settings updated."
     }
 
 @router.get("/ai-privacy")

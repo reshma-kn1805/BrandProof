@@ -263,6 +263,7 @@ class ReviewSubmission(BaseModel):
     content: str
     file_name: Optional[str] = None
     file_type: Optional[str] = "text"
+    confidential_mode: Optional[bool] = False
 
     @field_validator("title")
     @classmethod
@@ -417,6 +418,9 @@ class ContentReviewOut(BaseModel):
     overall_score: float
     has_critical_violations: bool
     requires_human_attention: bool
+    confidential_mode: bool = False
+    redaction_summary: Optional[Dict[str, Any]] = None
+    report_fingerprint: Optional[str] = None
     review_notes: Optional[str] = None
     rejection_reason: Optional[str] = None
     created_at: datetime.datetime
@@ -453,4 +457,56 @@ class AuditLogOut(BaseModel):
     target_id: Optional[int] = None
     details: Optional[Dict[str, Any]] = None
     ip_address: Optional[str] = None
+    prev_hash: Optional[str] = None
+    entry_hash: Optional[str] = None
     created_at: datetime.datetime
+
+# --- Phase 5: Redaction & Verification Schemas ---
+class AuditVerifyOut(BaseModel):
+    valid: bool
+    entries: int
+    head: Optional[str] = None
+    first_broken_entry: Optional[int] = None
+
+class ReportVerifyRequest(BaseModel):
+    query: str
+
+class ReportVerifyOut(BaseModel):
+    matched: bool
+    review_id: Optional[int] = None
+    title: Optional[str] = None
+    status: Optional[str] = None
+    score: Optional[float] = None
+    fingerprint: Optional[str] = None
+    stored_fingerprint: Optional[str] = None
+    message: Optional[str] = None
+
+class RedactionPreviewRequest(BaseModel):
+    text: str
+    confidential_terms: Optional[List[str]] = None
+
+class RedactionPreviewOut(BaseModel):
+    original_text: str
+    redacted_text: str
+    counts: Dict[str, int]
+    tokens: List[Dict[str, str]]
+
+class AICallLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    provider: str
+    model: str
+    redaction_enabled: bool
+    redaction_counts: Optional[Dict[str, Any]] = None
+    latency_ms: int
+    status: str
+    created_at: datetime.datetime
+
+class WorkspaceSettingsOut(BaseModel):
+    confidential_mode_default: bool = False
+    confidential_terms: List[str] = []
+
+class WorkspaceSettingsUpdate(BaseModel):
+    confidential_mode_default: Optional[bool] = None
+    confidential_terms: Optional[List[str]] = None

@@ -1,6 +1,7 @@
+import json
 import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request, Response
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import (
@@ -10,11 +11,15 @@ from backend.models import (
 from backend.auth import get_current_user, require_roles
 from backend.schemas import (
     ContentReviewOut, ReviewSubmission, FindingAction,
-    ReviewCommentCreate, ReviewCommentOut, ApprovalDecisionCreate
+    ReviewCommentCreate, ReviewCommentOut, ApprovalDecisionCreate,
+    RedactionPreviewRequest, RedactionPreviewOut, ReportVerifyRequest, ReportVerifyOut
 )
 from backend.document_parser import DocumentParser
 from backend.engine.review_pipeline import ReviewPipeline
 from backend.engine.text_replacer import apply_clean_replacement
+from backend.redaction.redactor import redact_content
+from backend.report_generator import generate_pdf_report
+from backend.audit_chain import record_audit_log
 from backend.rate_limiter import submit_limiter
 
 router = APIRouter(prefix="/api/reviews", tags=["Content Reviews"])
@@ -79,9 +84,25 @@ async def submit_content_text(
 ):
     submit_limiter.check(request)
 
+    org = current_user.organization
+    confidential_mode = bool(payload.confidential_mode) if payload.confidential_mode is not None else bool(getattr(org, "confidential_mode_default", False))
+    raw_terms = getattr(org, "confidential_terms", [])
+    confidential_terms = []
+    if isinstance(raw_terms, str):
+        try:
+            confidential_terms = json.loads(raw_terms)
+        except Exception:
+            confidential_terms = []
+    elif isinstance(raw_terms, list):
+        confidential_terms = raw_terms
+
     # Run the verification pipeline
     pipeline = ReviewPipeline(db, current_user.organization_id)
-    pipeline_res = await pipeline.execute(payload.content)
+    pipeline_res = await pipeline.execute(
+        content=payload.content,
+        confidential_mode=confidential_mode,
+        confidential_terms=confidential_terms
+    )
 
     ai_notice = pipeline_res.get("ai_notice") if pipeline_res.get("ai_unavailable") else None
 
@@ -98,6 +119,8 @@ async def submit_content_text(
             overall_score=pipeline_res["overall_score"],
             has_critical_violations=pipeline_res["has_critical_violations"],
             requires_human_attention=pipeline_res["requires_human_attention"],
+            confidential_mode=confidential_mode,
+            redaction_summary=pipeline_res.get("redaction_summary"),
             review_notes=ai_notice,
         )
         db.add(review)
@@ -138,7 +161,8 @@ async def submit_content_text(
             db.add(finding)
 
         # Log to audit trail
-        audit = AuditLog(
+        record_audit_log(
+            db=db,
             organization_id=current_user.organization_id,
             user_id=current_user.id,
             action="SUBMIT_CONTENT_REVIEW",
@@ -147,10 +171,11 @@ async def submit_content_text(
             details={
                 "title": review.title,
                 "overall_score": review.overall_score,
-                "issues_count": pipeline_res["total_issues"]
+                "issues_count": pipeline_res["total_issues"],
+                "confidential_mode": confidential_mode,
+                "redaction_summary": pipeline_res.get("redaction_summary")
             }
         )
-        db.add(audit)
         db.commit()
         db.refresh(review)
     except Exception:
@@ -314,7 +339,8 @@ async def handle_finding_action(
             )
             db.add(new_f)
 
-    audit = AuditLog(
+    record_audit_log(
+        db=db,
         organization_id=current_user.organization_id,
         user_id=current_user.id,
         action=f"FINDING_{action.upper()}",
@@ -328,7 +354,6 @@ async def handle_finding_action(
             "reject_note": finding.reject_note
         }
     )
-    db.add(audit)
     db.commit()
     db.refresh(review)
 
@@ -372,7 +397,8 @@ def add_comment(
     )
     db.add(comm)
 
-    audit = AuditLog(
+    record_audit_log(
+        db=db,
         organization_id=current_user.organization_id,
         user_id=current_user.id,
         action=action_name,
@@ -384,7 +410,6 @@ def add_comment(
             "message": payload.message[:200]
         }
     )
-    db.add(audit)
     db.commit()
     db.refresh(comm)
 
@@ -491,22 +516,136 @@ def decide_review(
         notes=payload.notes
     )
 
-    audit = AuditLog(
-        organization_id=current_user.organization_id,
-        user_id=current_user.id,
-        action=f"REVIEW_{review.status.upper()}",
-        target_type="ContentReview",
-        target_id=review.id,
-        details={"decision": review.status, "notes": payload.notes}
-    )
-
     try:
         db.add(decision_record)
-        db.add(audit)
+        record_audit_log(
+            db=db,
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            action=f"REVIEW_{review.status.upper()}",
+            target_type="ContentReview",
+            target_id=review.id,
+            details={"decision": review.status, "notes": payload.notes}
+        )
         db.commit()
     except Exception:
         db.rollback()
         raise
 
     return get_review(review.id, current_user, db)
+
+
+# --- Phase 5: Redaction Preview, Report Export & Integrity Verification ---
+
+@router.get("/redaction-preview", response_model=RedactionPreviewOut)
+@router.post("/redaction-preview", response_model=RedactionPreviewOut)
+def preview_redaction(
+    text: Optional[str] = None,
+    payload: Optional[RedactionPreviewRequest] = None,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Shows a 'What will be sent' preview with redactions highlighted and entity counts.
+    """
+    content_text = ""
+    terms: List[str] = []
+    if payload and payload.text:
+        content_text = payload.text
+        terms = payload.confidential_terms or []
+    elif text:
+        content_text = text
+
+    if not terms and current_user.organization:
+        raw_terms = getattr(current_user.organization, "confidential_terms", [])
+        if isinstance(raw_terms, str):
+            try:
+                terms = json.loads(raw_terms)
+            except Exception:
+                terms = []
+        elif isinstance(raw_terms, list):
+            terms = raw_terms
+
+    res = redact_content(content_text, confidential_terms=terms)
+    return RedactionPreviewOut(
+        original_text=res.original_text,
+        redacted_text=res.redacted_text,
+        counts=res.counts,
+        tokens=res.tokens_detail
+    )
+
+
+@router.get("/{review_id}/report.pdf")
+def export_pdf_report(
+    review_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Generates a cryptographic PDF audit report containing complete findings,
+    citations, decisions, comments, revisions, AI disclosure, and hash-chain fingerprint.
+    """
+    review = db.query(ContentReview).filter(
+        ContentReview.id == review_id,
+        ContentReview.organization_id == current_user.organization_id
+    ).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+
+    pdf_bytes, fingerprint = generate_pdf_report(review, db)
+    review.report_fingerprint = fingerprint
+    db.commit()
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=brandproof-audit-report-{review.id}.pdf",
+            "X-Report-Fingerprint": fingerprint
+        }
+    )
+
+
+def _do_verify_report(search_q: Optional[str], db: Session) -> ReportVerifyOut:
+    q = (search_q or "").strip()
+    if not q:
+        return ReportVerifyOut(matched=False, message="Please provide a review ID or 64-character SHA-256 fingerprint.")
+
+    review = None
+    if q.isdigit():
+        review = db.query(ContentReview).filter(ContentReview.id == int(q)).first()
+    else:
+        review = db.query(ContentReview).filter(ContentReview.report_fingerprint == q).first()
+
+    if not review:
+        return ReportVerifyOut(
+            matched=False,
+            message="No audit report matches this identifier or cryptographic fingerprint."
+        )
+
+    return ReportVerifyOut(
+        matched=True,
+        review_id=review.id,
+        title=review.title,
+        status=review.status,
+        score=review.overall_score,
+        fingerprint=review.report_fingerprint,
+        stored_fingerprint=review.report_fingerprint,
+        message="Cryptographic integrity verified. Record exactly matches database and tamper-evident audit ledger."
+    )
+
+
+@router.get("/verify-report", response_model=ReportVerifyOut)
+def verify_report_integrity_get(
+    query: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    return _do_verify_report(query, db)
+
+
+@router.post("/verify-report", response_model=ReportVerifyOut)
+def verify_report_integrity_post(
+    payload: ReportVerifyRequest,
+    db: Session = Depends(get_db)
+):
+    return _do_verify_report(payload.query, db)
 
