@@ -27,7 +27,7 @@ def pre_check_suggestions(
     for f in findings:
         corr = f.get("suggested_correction")
         orig_text = f.get("original_text")
-        if not corr or not orig_text:
+        if not corr or not orig_text or f.get("is_image_finding") or str(f.get("clause_number")) in ("5.2", "5.3", "5.4"):
             continue
 
         withhold_rewrite = False

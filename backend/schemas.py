@@ -264,6 +264,9 @@ class ReviewSubmission(BaseModel):
     file_name: Optional[str] = None
     file_type: Optional[str] = "text"
     confidential_mode: Optional[bool] = False
+    image_filename: Optional[str] = None
+    image_data: Optional[str] = None
+    image_alt_text: Optional[str] = None
 
     @field_validator("title")
     @classmethod
@@ -421,6 +424,10 @@ class ContentReviewOut(BaseModel):
     confidential_mode: bool = False
     redaction_summary: Optional[Dict[str, Any]] = None
     report_fingerprint: Optional[str] = None
+    image_filename: Optional[str] = None
+    image_url: Optional[str] = None
+    image_alt_text: Optional[str] = None
+    image_analysis: Optional[Dict[str, Any]] = None
     review_notes: Optional[str] = None
     rejection_reason: Optional[str] = None
     created_at: datetime.datetime

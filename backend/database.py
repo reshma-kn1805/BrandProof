@@ -81,6 +81,10 @@ def migrate_columns(target_engine=None):
                     ("redaction_summary", "TEXT"),
                     ("report_fingerprint", "VARCHAR(64)"),
                     ("is_demo_history", "BOOLEAN DEFAULT 0"),
+                    ("image_filename", "VARCHAR(255)"),
+                    ("image_url", "VARCHAR(500)"),
+                    ("image_alt_text", "TEXT"),
+                    ("image_analysis", "TEXT"),
                 ]
                 for col_name, col_type in new_cr_cols:
                     if col_name not in cr_cols:

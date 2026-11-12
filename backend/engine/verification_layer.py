@@ -52,11 +52,14 @@ class IndependentVerificationLayer:
                 continue
             seen_keys.add(dedup_key)
 
-            # Check 1: Quoted text must exist verbatim in the submitted content
-            if not original_text or original_text not in submitted_content:
-                # If quoted text is not present in document, ABSTAIN (rule 1)
-                # Never fabricate an issue on phantom text
-                continue
+            is_image_finding = bool(finding.get("is_image_finding") or clause_num in ("5.2", "5.3", "5.4"))
+
+            # Check 1: Quoted text must exist verbatim in the submitted content (for text findings)
+            if not is_image_finding:
+                if not original_text or original_text not in submitted_content:
+                    # If quoted text is not present in document, ABSTAIN (rule 1)
+                    # Never fabricate an issue on phantom text
+                    continue
 
             # Check 2, 3, 4: Cited guideline clause verification
             matched_clause = db_clauses.get(clause_num)

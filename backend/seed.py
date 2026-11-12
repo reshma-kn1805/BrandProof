@@ -146,6 +146,20 @@ def seed_database(db: Session = None):
                 "category": "Accessibility",
                 "severity": "warning",
             },
+            {
+                "clause_number": "5.3",
+                "title": "Visual Contrast & Legibility",
+                "description": "Digital visual assets and graphics must maintain a minimum WCAG 2.2 contrast ratio of 4.5:1 for standard graphical elements and 3:1 for large text or logos to guarantee visual legibility.",
+                "category": "Accessibility",
+                "severity": "warning",
+            },
+            {
+                "clause_number": "5.4",
+                "title": "Approved Brand Color Palette",
+                "description": "Visual assets must adhere to Nila Foods' approved brand palette: Nila Green (#2E7D4F), Millet Gold (#D9A441), Cream (#FFF8EC), and Charcoal (#2B2B2B). Dominant off-palette colors violate brand consistency.",
+                "category": "Brand Identity",
+                "severity": "warning",
+            },
         ]
 
         for c in clauses_data:

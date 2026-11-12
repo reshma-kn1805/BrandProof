@@ -185,6 +185,30 @@ This document tracks phase-by-phase execution, timestamps, changes, and verifica
   - `python -m pytest tests/test_phase6_features.py -q`: 3 passed in 3.51s.
   - Frontend static build (`NEXT_EXPORT=true npm run build`): Compiled and exported successfully with 0 errors (4/4 static pages).
 
+---
+
+## [Phase 7] Improvement 2: Image & Visual-Asset Accessibility Checks
+- **Timestamp**: 2026-11-12 22:08:00 IST
+- **Status**: Completed & Verified
+- **Key Changes**:
+  - `backend/engine/image_analyzer.py`: Implemented deterministic Pillow-based visual asset checks:
+    - Alt text quality check: missing, <5 chars, raw filenames, or redundant prefixes ("image of") -> Clause 5.2 (Media Alt Text).
+    - WCAG 2.2 contrast ratio calculation on dominant colors using sRGB linear conversion; flags <4.5:1 -> Clause 5.3 (Contrast).
+    - Approved palette check: quantizes top 5 dominant colors and computes CIE76 $\Delta E$ to Nila Foods palette (Nila Green, Millet Gold, Cream, Charcoal); flags off-palette colors ($\Delta E > 25$) -> Clause 5.4 with nearest approved color recommendation.
+  - `backend/models.py` & `backend/database.py`: Added `image_filename`, `image_url`, `image_alt_text`, `image_analysis` columns to `content_reviews` and updated `migrate_columns()`.
+  - `backend/seed.py`: Seeded Clause 5.3 ("Visual Contrast & Legibility") and Clause 5.4 ("Approved Brand Color Palette").
+  - `backend/engine/verification_layer.py`: Verified image findings against active tenant clauses without requiring verbatim span in text copy.
+  - `backend/engine/review_pipeline.py` & `backend/routers/reviews_router.py`: Wired image analysis into pipeline, `/api/reviews/submit` (with base64 `image_data`), and `/api/reviews/upload` (with multipart image file upload).
+  - `frontend/src/lib/api.ts`: Added `ImageAnalysisData` interface, updated `ContentReview`, and added mock image handling for demo mode.
+  - `frontend/src/components/NewReviewView.tsx`: Added image attachment section with file picker, thumbnail preview, required alt text field, and quick presets (non-compliant mockup & compliant asset).
+  - `frontend/src/components/ReviewDetailView.tsx`: Added Image Card displaying thumbnail, alt text with status pill, WCAG contrast ratio with pass/fail badge, extracted palette swatches with closest approved color and $\Delta E$, and transparent disclaimer banner.
+  - `tests/test_phase7_images.py`: Added 4 unit and integration tests verifying alt text rules, contrast/color math, non-compliant image scenario (exactly 3 findings), and compliant image scenario (0 findings).
+- **Verification Results**:
+  - `python -m pytest tests/test_phase7_images.py -v`: 4 passed in 7.74s.
+  - `python -m pytest tests -q`: 60 passed, 1195 warnings in 38.41s.
+  - Frontend static build (`NEXT_EXPORT=true npm run build`): Compiled and exported successfully with 0 errors (4/4 static pages).
+
+
 
 
 

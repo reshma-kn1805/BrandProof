@@ -164,6 +164,10 @@ class ContentReview(Base):
     redaction_summary = Column(JSON, nullable=True)
     report_fingerprint = Column(String(64), nullable=True)
     is_demo_history = Column(Boolean, default=False)
+    image_filename = Column(String(255), nullable=True)
+    image_url = Column(String(500), nullable=True)
+    image_alt_text = Column(Text, nullable=True)
+    image_analysis = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 

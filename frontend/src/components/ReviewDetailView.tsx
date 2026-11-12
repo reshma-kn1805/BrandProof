@@ -20,6 +20,7 @@ import {
   CornerDownRight,
   Download,
   Lock,
+  Image as ImageIcon,
 } from "lucide-react";
 import { api, ContentReview, ReviewFinding, User, activeEngineMode } from "../lib/api";
 
@@ -380,6 +381,129 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Content, Diffs, Revisions, Comments (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
+          {/* Phase 7 (Improvement 2): Image & Visual-Asset Accessibility Card */}
+          {(review.image_url || review.image_analysis) && (
+            <div className="bg-white rounded-lg border border-[#CBD5E1] shadow-subtle overflow-hidden">
+              <div className="p-4 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAFC]">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-[#328C91]" />
+                  <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wide">
+                    Attached Visual Asset & Accessibility Assessment
+                  </h3>
+                </div>
+                <span className="text-[10px] font-semibold px-2 py-0.5 bg-[#E0F2FE] text-[#0369A1] rounded">
+                  Pillow &bull; WCAG 2.2
+                </span>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  {/* Image Thumbnail */}
+                  <div className="md:col-span-5 flex flex-col items-center">
+                    <img
+                      src={review.image_url || undefined}
+                      alt={review.image_alt_text || "Attached visual asset thumbnail"}
+                      className="w-full max-h-48 object-contain rounded border border-[#CBD5E1] bg-slate-50 shadow-sm"
+                    />
+                    <span className="text-[11px] text-[#64748B] mt-1 font-mono">
+                      {review.image_filename || "visual_asset.png"}
+                    </span>
+                  </div>
+
+                  {/* Accessibility & Visual Metrics */}
+                  <div className="md:col-span-7 space-y-3">
+                    {/* Alt Text Quality */}
+                    <div className="p-2.5 bg-[#F8FAFC] rounded border border-[#E2E8F0]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-[#0F172A]">
+                          Alternative Text (Clause 5.2)
+                        </span>
+                        {review.image_analysis?.alt_text_pass !== false && review.image_alt_text?.trim() && review.image_alt_text.trim().length >= 5 ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#DCFCE7] text-[#166534] flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> PASS
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> FLAG
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-[#334155] mt-1 italic">
+                        {review.image_alt_text?.trim() ? `"${review.image_alt_text}"` : "(No alternative text provided)"}
+                      </p>
+                    </div>
+
+                    {/* WCAG Contrast Ratio */}
+                    <div className="p-2.5 bg-[#F8FAFC] rounded border border-[#E2E8F0]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-[#0F172A]">
+                          WCAG 2.2 Contrast Ratio (Clause 5.3)
+                        </span>
+                        {(review.image_analysis?.contrast_ratio ?? 0) >= 4.5 ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#DCFCE7] text-[#166534] flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> PASS (&ge; 4.5:1)
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FEE2E2] text-[#B91C1C] flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> FAIL (&lt; 4.5:1)
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="text-base font-extrabold font-mono text-[#0F172A]">
+                          {review.image_analysis?.contrast_ratio ? `${review.image_analysis.contrast_ratio.toFixed(1)}:1` : "N/A"}
+                        </span>
+                        <span className="text-[11px] text-[#64748B]">
+                          (Minimum required: 4.5:1 for standard elements)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Extracted Palette Swatches */}
+                    <div className="p-2.5 bg-[#F8FAFC] rounded border border-[#E2E8F0] space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-[#0F172A]">
+                          Extracted Palette Swatches (Clause 5.4)
+                        </span>
+                        {review.image_analysis?.palette_pass !== false ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#DCFCE7] text-[#166534] flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> Approved Palette
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> Off-Palette Color
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {(review.image_analysis?.dominant_colors ?? []).map((col, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5 px-2 py-1 bg-white rounded border border-[#CBD5E1] shadow-2xs">
+                            <span
+                              className="w-4 h-4 rounded-full border border-black/20 shrink-0"
+                              style={{ backgroundColor: col.hex }}
+                            />
+                            <div className="text-[10px] font-mono leading-none">
+                              <span className="font-bold text-[#0F172A] block">{col.hex}</span>
+                              <span className="text-[#64748B] text-[9px]">
+                                {col.percentage}% &bull; {col.closest_approved.name} ({col.closest_approved.delta_e} &Delta;E)
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Transparent Disclaimer */}
+                <div className="p-2.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded text-[11px] text-[#1E40AF] leading-relaxed">
+                  <span className="font-semibold">Transparent Disclaimer: </span>
+                  Image checks evaluate palette proximity and WCAG contrast. They do not perform optical character recognition. Contrast is estimated from dominant colors unless text/background colors are explicitly picked.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Revision History & Content Card */}
           <div className="bg-white rounded-lg border border-[#DCE7E8] shadow-subtle overflow-hidden">
             <div className="p-4 border-b border-[#DCE7E8] flex items-center justify-between bg-[#F7FAFA]">

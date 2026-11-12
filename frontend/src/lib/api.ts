@@ -116,6 +116,30 @@ export interface ApprovalDecision {
   decided_at: string;
 }
 
+export interface ImageDominantColor {
+  hex: string;
+  rgb: number[];
+  percentage: number;
+  closest_approved: {
+    name: string;
+    hex: string;
+    delta_e: number;
+  };
+}
+
+export interface ImageAnalysisData {
+  format?: string;
+  dimensions?: { width: number; height: number };
+  alt_text?: string;
+  alt_text_pass?: boolean;
+  dominant_colors: ImageDominantColor[];
+  contrast_ratio: number;
+  contrast_pass: boolean;
+  palette_pass: boolean;
+  findings?: ReviewFinding[];
+  disclaimer: string;
+}
+
 export interface ContentReview {
   id: number;
   title: string;
@@ -140,6 +164,10 @@ export interface ContentReview {
   confidential_mode?: boolean;
   redaction_summary?: Record<string, any>;
   report_fingerprint?: string;
+  image_filename?: string;
+  image_url?: string;
+  image_alt_text?: string;
+  image_analysis?: ImageAnalysisData;
   review_notes?: string;
   rejection_reason?: string;
   created_at: string;
@@ -389,7 +417,13 @@ class MockDataStore {
     }
   }
 
-  runVerification(content: string, title: string): ContentReview {
+  runVerification(
+    content: string,
+    title: string,
+    imageData?: string,
+    imageFilename?: string,
+    imageAltText?: string
+  ): ContentReview {
     const findings: ReviewFinding[] = [];
     let score = 100;
     let hasCritical = false;
@@ -503,12 +537,143 @@ class MockDataStore {
       score -= 12;
     }
 
+    // Stage 4.5: Image Accessibility Checks
+    let imageAnalysis: ImageAnalysisData | undefined = undefined;
+    if (imageData) {
+      const cleanAlt = (imageAltText || "").trim();
+      let altFinding: ReviewFinding | null = null;
+      if (!cleanAlt) {
+        altFinding = {
+          id: Date.now() + 10,
+          review_id: this.reviews.length + 1,
+          clause_number: "5.2",
+          title: "Missing Media Alternative Text",
+          original_text: "Image attached without alternative text",
+          severity: "warning",
+          explanation: "Clause 5.2 requires clear, descriptive alternative text for screen readers and accessibility conformance on all media assets.",
+          suggested_correction: "Add descriptive alt text describing the image content (minimum 5 characters).",
+          confidence: 1.0,
+          verification_status: "verified_clause",
+          evidence_source: "Clause 5.2 Accessibility and Media Alt Text",
+          decision_status: "pending",
+          engine_source: "image_analysis",
+          created_at: new Date().toISOString(),
+        };
+      } else if (cleanAlt.length < 5) {
+        altFinding = {
+          id: Date.now() + 10,
+          review_id: this.reviews.length + 1,
+          clause_number: "5.2",
+          title: "Alternative Text Too Short",
+          original_text: cleanAlt,
+          severity: "warning",
+          explanation: `Clause 5.2 requires meaningful alt text. '${cleanAlt}' is shorter than the 5-character minimum threshold.`,
+          suggested_correction: "Provide a descriptive sentence summarizing the image content.",
+          confidence: 1.0,
+          verification_status: "verified_clause",
+          evidence_source: "Clause 5.2 Accessibility and Media Alt Text",
+          decision_status: "pending",
+          engine_source: "image_analysis",
+          created_at: new Date().toISOString(),
+        };
+      } else if (cleanAlt.toLowerCase().startsWith("image of") || cleanAlt.toLowerCase().startsWith("picture of")) {
+        altFinding = {
+          id: Date.now() + 10,
+          review_id: this.reviews.length + 1,
+          clause_number: "5.2",
+          title: "Redundant Alternative Text Prefix",
+          original_text: cleanAlt,
+          severity: "warning",
+          explanation: "Clause 5.2 discourages redundant introductory phrases. Screen readers automatically announce images to users.",
+          suggested_correction: cleanAlt.replace(/^(image of|picture of)\s*/i, ""),
+          confidence: 1.0,
+          verification_status: "verified_clause",
+          evidence_source: "Clause 5.2 Accessibility and Media Alt Text",
+          decision_status: "pending",
+          engine_source: "image_analysis",
+          created_at: new Date().toISOString(),
+        };
+      }
+
+      if (altFinding) {
+        findings.push(altFinding);
+        score -= 12;
+      }
+
+      const isNonCompliant = !imageAltText || cleanAlt.length < 5 || imageData.includes("magenta") || !imageFilename?.includes("compliant");
+      const contrastRatio = isNonCompliant ? 1.8 : 8.5;
+      const contrastPass = contrastRatio >= 4.5;
+      const palettePass = !isNonCompliant;
+
+      if (!contrastPass) {
+        findings.push({
+          id: Date.now() + 11,
+          review_id: this.reviews.length + 1,
+          clause_number: "5.3",
+          title: "Insufficient WCAG Visual Contrast",
+          original_text: `Contrast ratio ${contrastRatio.toFixed(1)}:1 below 4.5:1 threshold`,
+          severity: "warning",
+          explanation: `Clause 5.3 requires a minimum WCAG 2.2 contrast ratio of 4.5:1 for graphical legibility. Measured dominant ratio is ${contrastRatio.toFixed(1)}:1.`,
+          suggested_correction: "Adjust foreground/background luminance to achieve at least 4.5:1 contrast ratio.",
+          confidence: 1.0,
+          verification_status: "verified_clause",
+          evidence_source: "Clause 5.3 Visual Contrast & Legibility",
+          decision_status: "pending",
+          engine_source: "image_analysis",
+          created_at: new Date().toISOString(),
+        });
+        score -= 12;
+      }
+
+      if (!palettePass) {
+        findings.push({
+          id: Date.now() + 12,
+          review_id: this.reviews.length + 1,
+          clause_number: "5.4",
+          title: "Unapproved Brand Color Detected",
+          original_text: "Off-palette color #FF00FF detected, closest approved: #2E7D4F",
+          severity: "warning",
+          explanation: "Clause 5.4 restricts dominant brand graphics to Nila Foods' approved palette (Nila Green, Millet Gold, Cream, Charcoal). Detected off-palette color #FF00FF.",
+          suggested_correction: "Replace with nearest approved brand color Nila Green (#2E7D4F).",
+          confidence: 1.0,
+          verification_status: "verified_clause",
+          evidence_source: "Clause 5.4 Approved Brand Color Palette",
+          decision_status: "pending",
+          engine_source: "image_analysis",
+          created_at: new Date().toISOString(),
+        });
+        score -= 12;
+      }
+
+      imageAnalysis = {
+        format: "PNG",
+        dimensions: { width: 400, height: 300 },
+        alt_text: cleanAlt,
+        alt_text_pass: altFinding === null,
+        dominant_colors: isNonCompliant ? [
+          { hex: "#FF00FF", rgb: [255, 0, 255], percentage: 70.0, closest_approved: { name: "Nila Green", hex: "#2E7D4F", delta_e: 82.4 } },
+          { hex: "#990099", rgb: [153, 0, 153], percentage: 30.0, closest_approved: { name: "Charcoal", hex: "#2B2B2B", delta_e: 64.1 } }
+        ] : [
+          { hex: "#2E7D4F", rgb: [46, 125, 79], percentage: 65.0, closest_approved: { name: "Nila Green", hex: "#2E7D4F", delta_e: 0.0 } },
+          { hex: "#FFF8EC", rgb: [255, 248, 236], percentage: 35.0, closest_approved: { name: "Cream", hex: "#FFF8EC", delta_e: 0.0 } }
+        ],
+        contrast_ratio: contrastRatio,
+        contrast_pass: contrastPass,
+        palette_pass: palettePass,
+        disclaimer: "Image checks evaluate palette proximity and WCAG contrast. They do not perform optical character recognition. Contrast is estimated from dominant colors unless text/background colors are explicitly picked."
+      };
+    }
+
     const review: ContentReview = {
       id: Date.now(),
       title,
       original_content: content,
       current_content: content,
-      source_file_type: "text",
+      source_file_type: imageData ? "image" : "text",
+      image_filename: imageFilename,
+      image_url: imageData,
+      image_alt_text: imageAltText,
+      image_analysis: imageAnalysis,
       status: findings.length > 0 ? "in_review" : "approved",
       author_id: this.currentUser.id,
       author_name: this.currentUser.full_name,
@@ -655,7 +820,7 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
 
   // Reviews
   if (endpoint.startsWith("/api/reviews/submit")) {
-    let data = {
+    let data: any = {
       title: "Content Review",
       content:
         "Nila Millet-Mix is India's #1 healthy breakfast! Guaranteed to cut sugar cravings. Buy now.",
@@ -665,7 +830,13 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
         data = JSON.parse(options.body);
       } catch (_) {}
     }
-    const review = mockStore.runVerification(data.content, data.title);
+    const review = mockStore.runVerification(
+      data.content,
+      data.title,
+      data.image_data,
+      data.image_filename,
+      data.image_alt_text
+    );
     return review as unknown as T;
   }
 
@@ -1194,6 +1365,9 @@ export const api = {
     file_name?: string;
     file_type?: string;
     confidential_mode?: boolean;
+    image_filename?: string;
+    image_data?: string;
+    image_alt_text?: string;
   }) =>
     apiFetch<ContentReview>("/api/reviews/submit", {
       method: "POST",

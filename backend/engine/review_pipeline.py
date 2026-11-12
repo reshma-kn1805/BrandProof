@@ -5,6 +5,7 @@ from backend.engine.deterministic_engine import DeterministicEngine
 from backend.engine.ai_review_engine import AIReviewEngine
 from backend.engine.verification_layer import IndependentVerificationLayer
 from backend.engine.suggestion_prechecker import pre_check_suggestions
+from backend.engine.image_analyzer import analyze_image_accessibility
 
 class ReviewPipeline:
     """
@@ -13,6 +14,7 @@ class ReviewPipeline:
     Stage 2: Deterministic Rule Engine
     Stage 3: Evidence Retrieval
     Stage 4: AI-Assisted Contextual Review
+    Stage 4.5: Image & Visual-Asset Accessibility Checks
     Stage 5: Independent Python Verification Layer
     Stage 5.5: Suggestion Pre-Check & Human Attention Routing
     Stage 6: Scoring, Abstention, & Routing
@@ -28,7 +30,9 @@ class ReviewPipeline:
         content: str,
         confidential_mode: bool = False,
         confidential_terms: Optional[List[str]] = None,
-        review_id: Optional[int] = None
+        review_id: Optional[int] = None,
+        image_bytes: Optional[bytes] = None,
+        image_alt_text: Optional[str] = None
     ) -> Dict[str, Any]:
         # Stage 3: Retrieve tenant evidence context
         evidence_ctx = self.retriever.get_all_evidence_context()
@@ -55,8 +59,19 @@ class ReviewPipeline:
             af["engine_source"] = "ai"
             af["is_ai_assisted"] = True
 
+        # Stage 4.5: Image Accessibility & Color Palette Checks
+        image_findings = []
+        image_analysis_out = None
+        if image_bytes is not None:
+            image_analysis_out = analyze_image_accessibility(image_bytes, alt_text=image_alt_text)
+            for im_f in image_analysis_out.get("findings", []):
+                im_f["is_image_finding"] = True
+                im_f["engine_source"] = "image_analysis"
+                im_f["is_ai_assisted"] = False
+                image_findings.append(im_f)
+
         # Combine candidates
-        raw_candidates = deterministic_findings + ai_findings
+        raw_candidates = deterministic_findings + ai_findings + image_findings
 
         # Stage 5 & 6: Independent Verification Layer & Abstention
         verified_findings = self.verifier.verify_findings(raw_candidates, content)
@@ -99,6 +114,7 @@ class ReviewPipeline:
             "ai_provider": ai_res.get("provider", "deterministic-fallback"),
             "ai_notice": ai_res.get("notice"),
             "redaction_summary": ai_res.get("redaction_summary"),
+            "image_analysis": image_analysis_out,
             "total_issues": len(verified_findings),
         }
 

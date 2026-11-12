@@ -1,4 +1,5 @@
 import json
+import base64
 import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request, Response
@@ -96,12 +97,30 @@ async def submit_content_text(
     elif isinstance(raw_terms, list):
         confidential_terms = raw_terms
 
+    # Decode image data if present
+    image_bytes = None
+    raw_b64 = None
+    if payload.image_data:
+        raw_b64 = payload.image_data
+        if "," in raw_b64:
+            raw_b64 = raw_b64.split(",", 1)[1]
+        try:
+            image_bytes = base64.b64decode(raw_b64)
+            if len(image_bytes) > 5 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="Image exceeds maximum 5 MB limit.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid image encoding: {str(e)}")
+
     # Run the verification pipeline
     pipeline = ReviewPipeline(db, current_user.organization_id)
     pipeline_res = await pipeline.execute(
         content=payload.content,
         confidential_mode=confidential_mode,
-        confidential_terms=confidential_terms
+        confidential_terms=confidential_terms,
+        image_bytes=image_bytes,
+        image_alt_text=payload.image_alt_text
     )
 
     ai_notice = pipeline_res.get("ai_notice") if pipeline_res.get("ai_unavailable") else None
@@ -112,8 +131,8 @@ async def submit_content_text(
             title=payload.title,
             original_content=payload.content,
             current_content=payload.content,
-            source_filename=payload.file_name or "direct_input.txt",
-            source_file_type=payload.file_type or "text",
+            source_filename=payload.file_name or ("mockup.png" if image_bytes else "direct_input.txt"),
+            source_file_type=payload.file_type or ("image" if image_bytes else "text"),
             status="in_review" if pipeline_res["total_issues"] > 0 else "draft",
             author_id=current_user.id,
             overall_score=pipeline_res["overall_score"],
@@ -122,6 +141,10 @@ async def submit_content_text(
             confidential_mode=confidential_mode,
             redaction_summary=pipeline_res.get("redaction_summary"),
             review_notes=ai_notice,
+            image_filename=payload.image_filename or (payload.file_name if image_bytes else None),
+            image_url=f"data:image/png;base64,{raw_b64}" if raw_b64 else None,
+            image_alt_text=payload.image_alt_text,
+            image_analysis=pipeline_res.get("image_analysis"),
         )
         db.add(review)
         db.flush()
@@ -191,23 +214,45 @@ async def upload_content_file(
     request: Request,
     title: str = Form(...),
     file: UploadFile = File(...),
+    alt_text: Optional[str] = Form(None),
+    confidential_mode: Optional[bool] = Form(False),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     submit_limiter.check(request)
+    filename_lower = (file.filename or "").lower()
+    is_image = filename_lower.endswith((".png", ".jpg", ".jpeg", ".webp"))
+
     try:
         contents = await file.read()
-        extracted_text, file_type = DocumentParser.extract_text_from_bytes(contents, file.filename)
+        if len(contents) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Uploaded file exceeds 5 MB size limit.")
+        
+        if is_image:
+            image_b64 = base64.b64encode(contents).decode("utf-8")
+            submission = ReviewSubmission(
+                title=title,
+                content=f"[Attached Visual Asset: {file.filename}]",
+                file_name=file.filename,
+                file_type="image",
+                confidential_mode=confidential_mode,
+                image_filename=file.filename,
+                image_data=image_b64,
+                image_alt_text=alt_text
+            )
+            return await submit_content_text(submission, request, current_user, db)
+        else:
+            extracted_text, file_type = DocumentParser.extract_text_from_bytes(contents, file.filename)
+            submission = ReviewSubmission(
+                title=title,
+                content=extracted_text,
+                file_name=file.filename,
+                file_type=file_type,
+                confidential_mode=confidential_mode
+            )
+            return await submit_content_text(submission, request, current_user, db)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-    submission = ReviewSubmission(
-        title=title,
-        content=extracted_text,
-        file_name=file.filename,
-        file_type=file_type
-    )
-    return await submit_content_text(submission, request, current_user, db)
 
 @router.post("/{review_id}/findings/{finding_id}/action", response_model=ContentReviewOut)
 async def handle_finding_action(
@@ -340,6 +385,27 @@ async def handle_finding_action(
                 decision_status="pending"
             )
             db.add(new_f)
+    else:
+        # Image findings or non-content modifications: recalculate compliance score from pending findings
+        all_findings = db.query(ReviewFinding).filter(ReviewFinding.review_id == review.id).all()
+        pending_findings = [f for f in all_findings if f.decision_status not in ("accepted", "rejected")]
+        new_score = 100.0
+        has_crit = False
+        req_attn = False
+        for f in pending_findings:
+            sev = (f.severity or "warning").lower()
+            if sev == "critical":
+                new_score -= 22.0
+                has_crit = True
+            elif sev == "warning":
+                new_score -= 12.0
+            else:
+                new_score -= 5.0
+            if f.verification_status in ["pending_human_review", "expired_fact_detected"] or f.needs_human_look:
+                req_attn = True
+        review.overall_score = max(0.0, round(new_score, 1))
+        review.has_critical_violations = has_crit
+        review.requires_human_attention = req_attn
 
     record_audit_log(
         db=db,

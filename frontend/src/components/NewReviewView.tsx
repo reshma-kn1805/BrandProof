@@ -35,6 +35,61 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewData, setPreviewData] = useState<RedactionPreviewResult | null>(null);
 
+  // Phase 7: Visual Asset / Image Attachment State
+  const [imageData, setImageData] = useState<string | null>(null);
+  const [imageFilename, setImageFilename] = useState<string | null>(null);
+  const [imageAltText, setImageAltText] = useState("");
+
+  const createSampleImage = (type: "non_compliant" | "compliant") => {
+    if (typeof document === "undefined") return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 240;
+    canvas.height = 160;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    if (type === "non_compliant") {
+      // Off-palette Magenta background #FF00FF
+      ctx.fillStyle = "#FF00FF";
+      ctx.fillRect(0, 0, 240, 160);
+      // Low-contrast dark purple text #990099 (contrast ratio 1.8:1, fails 4.5:1)
+      ctx.fillStyle = "#990099";
+      ctx.font = "bold 18px sans-serif";
+      ctx.fillText("Nila Millet Mix", 35, 85);
+      setImageData(canvas.toDataURL("image/png"));
+      setImageFilename("packaging_mockup_v1.png");
+      setImageAltText(""); // Intentionally empty to trigger Clause 5.2
+    } else {
+      // Approved Nila Green background #2E7D4F
+      ctx.fillStyle = "#2E7D4F";
+      ctx.fillRect(0, 0, 240, 160);
+      // Approved Cream text #FFF8EC (contrast ratio 8.5:1, passes 4.5:1)
+      ctx.fillStyle = "#FFF8EC";
+      ctx.font = "bold 18px sans-serif";
+      ctx.fillText("Nila Millet Mix", 35, 85);
+      setImageData(canvas.toDataURL("image/png"));
+      setImageFilename("nila_millet_mix_pack.png");
+      setImageAltText("Nila Foods traditional millet cereal packaging illustration");
+    }
+  };
+
+  const handleImageFileSelect = (file: File) => {
+    setImageFilename(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        setImageData(e.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setImageData(null);
+    setImageFilename(null);
+    setImageAltText("");
+  };
+
   // Preset demo drafts
   const SAMPLE_VIOLATIONS_DRAFT =
     "Nila Millet-Mix is India's #1 healthy breakfast! Guaranteed to cut sugar cravings. Buy now.";
@@ -98,9 +153,12 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
         const review = await api.submitReview({
           title,
           content,
-          file_name: "direct_input.txt",
-          file_type: "text",
+          file_name: imageFilename || "direct_input.txt",
+          file_type: imageData ? "image" : "text",
           confidential_mode: confidentialMode,
+          image_filename: imageFilename || undefined,
+          image_data: imageData || undefined,
+          image_alt_text: imageAltText,
         });
         onReviewCreated(review.id);
       } else {
@@ -113,6 +171,9 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
         formData.append("title", title);
         formData.append("file", selectedFile);
         formData.append("confidential_mode", String(confidentialMode));
+        if (imageAltText) {
+          formData.append("alt_text", imageAltText);
+        }
         const review = await api.uploadReviewFile(formData);
         onReviewCreated(review.id);
       }
@@ -274,6 +335,118 @@ export const NewReviewView: React.FC<NewReviewViewProps> = ({
             </div>
           </div>
         )}
+
+        {/* Phase 7 (Improvement 2): Image & Visual-Asset Accessibility Checks */}
+        <div className="p-4 bg-white border border-[#CBD5E1] rounded-lg space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
+                <span>Visual Asset & Accessibility Checks</span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 bg-[#E0F2FE] text-[#0369A1] rounded">
+                  Pillow &bull; WCAG 2.2
+                </span>
+              </span>
+              <p className="text-[11px] text-[#475569] mt-0.5">
+                Attach marketing artwork, packaging mockup, or banner (PNG, JPG, WebP &le; 5 MB). Evaluates alt text, WCAG 2.2 contrast ratio, and approved palette conformance.
+              </p>
+            </div>
+            {imageData && (
+              <button
+                type="button"
+                onClick={handleRemoveImage}
+                className="text-xs text-rose-600 hover:text-rose-800 font-medium flex items-center gap-1"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Remove Asset</span>
+              </button>
+            )}
+          </div>
+
+          {/* Quick Presets */}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                createSampleImage("non_compliant");
+                if (!title) setTitle("Packaging Mockup - Summer Millet Blend");
+                if (!content) setContent("Nila Millet Mix packaging banner artwork.");
+              }}
+              className="text-[11px] px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded font-medium flex items-center gap-1 transition-colors"
+            >
+              <span>Attach Non-Compliant Mockup (No Alt, Low Contrast, Magenta)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                createSampleImage("compliant");
+                if (!title) setTitle("Compliant Brand Asset - Nila Green Pouch");
+                if (!content) setContent("Nila Millet Mix certified packaging banner.");
+              }}
+              className="text-[11px] px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 rounded font-medium flex items-center gap-1 transition-colors"
+            >
+              <span>Attach Compliant Asset (Alt Text, 8.5:1 Contrast, Approved Palette)</span>
+            </button>
+          </div>
+
+          {imageData ? (
+            <div className="flex items-start gap-4 p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md">
+              <img
+                src={imageData}
+                alt={imageAltText || "Attached visual asset preview"}
+                className="w-28 h-20 object-cover rounded border border-[#CBD5E1] shadow-sm bg-white"
+              />
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-[#0F172A]">
+                    {imageFilename || "attached_image.png"}
+                  </span>
+                  <span className="text-[10px] text-[#64748B]">Ready for analysis</span>
+                </div>
+                <div>
+                  <label htmlFor="image-alt-text-input" className="block text-[11px] font-semibold text-[#0F172A] mb-1">
+                    Image Alternative Text (Required for Clause 5.2 Accessibility) *
+                  </label>
+                  <input
+                    id="image-alt-text-input"
+                    type="text"
+                    value={imageAltText}
+                    onChange={(e) => setImageAltText(e.target.value)}
+                    placeholder="e.g. Nila Foods traditional millet cereal packaging illustration"
+                    className="w-full px-2.5 py-1.5 text-xs border border-[#CBD5E1] rounded focus:outline-none focus:border-[#328C91] text-[#0F172A]"
+                  />
+                  {!imageAltText.trim() && (
+                    <p className="text-[10px] text-amber-700 mt-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                      <span>Missing alt text will trigger Clause 5.2 finding.</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                id="image-file-input"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    handleImageFileSelect(e.target.files[0]);
+                  }
+                }}
+              />
+              <label
+                htmlFor="image-file-input"
+                className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded text-xs font-medium cursor-pointer flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <UploadCloud className="w-3.5 h-3.5 text-[#328C91]" />
+                <span>Upload PNG, JPG, WebP image</span>
+              </label>
+              <span className="text-[11px] text-[#64748B]">Max 5 MB. Or click a quick preset above.</span>
+            </div>
+          )}
+        </div>
 
         {/* Phase 5: Confidential Mode & Redaction Preview Control */}
         <div className="p-4 bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg space-y-3">
