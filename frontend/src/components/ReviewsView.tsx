@@ -25,6 +25,7 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadReviews();
@@ -33,10 +34,11 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
   const loadReviews = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await api.getReviews(filter);
       setReviews(data);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setError(err?.message || "Failed to retrieve reviews.");
     } finally {
       setLoading(false);
     }
@@ -109,9 +111,35 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
             <div className="w-5 h-5 border-2 border-[#328C91] border-t-transparent rounded-full animate-spin"></div>
             <span>Loading reviews...</span>
           </div>
+        ) : error ? (
+          <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
+            <AlertCircle className="w-6 h-6 text-[#B91C1C]" />
+            <p className="text-xs text-[#B91C1C] max-w-sm">{error}</p>
+            <button
+              onClick={loadReviews}
+              className="px-3.5 py-1.5 bg-[#EAF2F3] hover:bg-[#DCE7E8] text-[#205E65] text-xs font-semibold rounded-md border border-[#DCE7E8] transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         ) : filteredReviews.length === 0 ? (
-          <div className="p-12 text-center text-xs text-[#63777C]">
-            No reviews match the current filter.
+          <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-[#EAF2F3] flex items-center justify-center text-[#205E65]">
+              <FileCheck2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-[#172C32]">No Content Reviews Found</h3>
+            <p className="text-xs text-[#63777C] max-w-sm">
+              {filter !== "all" || search
+                ? "No reviews match your current filter or search criteria."
+                : "Submit marketing copy or packaging text for automated compliance verification against active brand guidelines."}
+            </p>
+            <button
+              onClick={onNavigateToNewReview}
+              className="mt-1 px-4 py-2 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded-md shadow-sm transition-colors flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Submit Content for Review</span>
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">

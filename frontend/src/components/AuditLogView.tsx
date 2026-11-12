@@ -77,9 +77,26 @@ export const AuditLogView: React.FC = () => {
 
       <div className="bg-white rounded-lg border border-[#DCE7E8] shadow-subtle overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-xs text-[#63777C]">Loading audit trail...</div>
+          <div className="p-12 text-center text-xs text-[#63777C] flex flex-col items-center gap-2">
+            <div className="w-5 h-5 border-2 border-[#328C91] border-t-transparent rounded-full animate-spin"></div>
+            <span>Loading audit trail...</span>
+          </div>
         ) : filtered.length === 0 ? (
-          <div className="p-12 text-center text-xs text-[#63777C]">No audit log events found.</div>
+          <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-[#EAF2F3] flex items-center justify-center text-[#205E65]">
+              <History className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-[#172C32]">Audit Log Empty</h3>
+            <p className="text-xs text-[#63777C] max-w-sm">
+              No audit events found matching the active filter. Governance actions, rule checks, and sign-offs will appear here automatically.
+            </p>
+            <button
+              onClick={loadLogs}
+              className="mt-1 px-3.5 py-1.5 bg-[#EAF2F3] hover:bg-[#DCE7E8] text-[#205E65] text-xs font-semibold rounded-md border border-[#DCE7E8] transition-colors"
+            >
+              Refresh Logs
+            </button>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">

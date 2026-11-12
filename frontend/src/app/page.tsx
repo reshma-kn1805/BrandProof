@@ -18,6 +18,7 @@ import { TeamView } from "../components/TeamView";
 import { SettingsView } from "../components/SettingsView";
 import { AuthModal } from "../components/AuthModal";
 import { BrandLogo } from "../components/BrandLogo";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import {
   api,
   clearToken,
@@ -58,7 +59,39 @@ export default function Home() {
   useEffect(() => {
     let isCancelled = false;
 
+    // Detect deep link view parameter when unauthenticated
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const deepLink = params.get("view") || window.location.hash.replace("#", "");
+      const validViews = [
+        "dashboard", "reviews", "new_review", "guidelines", "version_compare",
+        "facts", "terminology", "assets", "approvals", "audit", "team", "settings"
+      ];
+      if (deepLink && validViews.includes(deepLink)) {
+        sessionStorage.setItem("brandproof_return_view", deepLink);
+      }
+    }
+
     async function initSystem() {
+      // If user previously switched to demo mode in this session, keep them in demo mode without waking pause
+      if (typeof window !== "undefined" && sessionStorage.getItem("brandproof_force_demo") === "true") {
+        const quickCheck = await checkBackendHealth(1500);
+        if (quickCheck && !isCancelled) {
+          sessionStorage.removeItem("brandproof_force_demo");
+          setEngineMode("connected");
+          setIsDemoMode(false);
+          setServerStatus("connected");
+          await checkAuth();
+          return;
+        } else if (!isCancelled) {
+          setEngineMode("demo");
+          setIsDemoMode(true);
+          setServerStatus("demo");
+          await checkAuth();
+          return;
+        }
+      }
+
       // Step 1: Probe backend with a 6-second timeout
       const isOnline = await checkBackendHealth(6000);
       if (isCancelled) return;
@@ -99,6 +132,7 @@ export default function Home() {
 
       // Step 3: Timed out after 60s -> Fall back to isolated demo mode with clear banner
       if (!isCancelled) {
+        sessionStorage.setItem("brandproof_force_demo", "true");
         setEngineMode("demo");
         setIsDemoMode(true);
         setServerStatus("demo");
@@ -149,6 +183,7 @@ export default function Home() {
     setCurrentUser(null);
     setSessionExpiredMsg(null);
     if (typeof window !== "undefined") {
+      sessionStorage.removeItem("brandproof_force_demo");
       localStorage.removeItem("brandproof_active_view");
       localStorage.removeItem("brandproof_selected_review_id");
     }
@@ -212,6 +247,7 @@ export default function Home() {
           <div>
             <button
               onClick={() => {
+                sessionStorage.setItem("brandproof_force_demo", "true");
                 setEngineMode("demo");
                 setIsDemoMode(true);
                 setServerStatus("demo");
@@ -242,13 +278,22 @@ export default function Home() {
   // Screen: Unauthenticated
   if (!currentUser) {
     return (
-      <AuthModal
-        onSuccess={(user) => {
-          setCurrentUser(user);
-          setSessionExpiredMsg(null);
-        }}
-        sessionExpiredMessage={sessionExpiredMsg}
-      />
+      <ErrorBoundary>
+        <AuthModal
+          onSuccess={(user) => {
+            setCurrentUser(user);
+            setSessionExpiredMsg(null);
+            if (typeof window !== "undefined") {
+              const returnView = sessionStorage.getItem("brandproof_return_view");
+              if (returnView) {
+                sessionStorage.removeItem("brandproof_return_view");
+                handleSetActiveView(returnView as any);
+              }
+            }
+          }}
+          sessionExpiredMessage={sessionExpiredMsg}
+        />
+      </ErrorBoundary>
     );
   }
 
@@ -286,100 +331,102 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#F7FAFA]">
-      {/* Permanent Charcoal Sidebar */}
-      <Sidebar
-        activeView={activeView === "review_detail" ? "reviews" : activeView}
-        setActiveView={(v) => {
-          setSelectedReviewId(null);
-          handleSetActiveView(v);
-          if (typeof window !== "undefined") {
-            localStorage.removeItem("brandproof_selected_review_id");
-          }
-        }}
-        currentUser={currentUser}
-        onLogout={handleLogout}
-      />
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {isDemoMode && (
-          <div className="bg-[#EAF2F3] border-b border-[#205E65]/20 text-[#205E65] px-4 py-2 text-xs text-center font-medium">
-            Demo mode: sample data in your browser. The full engine could not be reached.
-          </div>
-        )}
-        <Header
-          title={getViewTitle()}
+    <ErrorBoundary>
+      <div className="flex h-screen w-screen overflow-hidden bg-[#F7FAFA]">
+        {/* Permanent Charcoal Sidebar */}
+        <Sidebar
+          activeView={activeView === "review_detail" ? "reviews" : activeView}
+          setActiveView={(v) => {
+            setSelectedReviewId(null);
+            handleSetActiveView(v);
+            if (typeof window !== "undefined") {
+              localStorage.removeItem("brandproof_selected_review_id");
+            }
+          }}
           currentUser={currentUser}
-          onSwitchRole={handleSwitchRole}
-          onLoadDemoDraft={handleLoadDemoDraft}
+          onLogout={handleLogout}
         />
 
-        <main className="flex-1 overflow-y-auto">
-          {activeView === "dashboard" && (
-            <DashboardView
-              onNavigateToReviews={() => handleSetActiveView("reviews")}
-              onNavigateToNewReview={() => handleSetActiveView("new_review")}
-              onNavigateToFacts={() => handleSetActiveView("facts")}
-              onNavigateToGuidelines={() => handleSetActiveView("guidelines")}
-              onSelectReview={handleSelectReview}
-            />
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {isDemoMode && (
+            <div className="bg-[#EAF2F3] border-b border-[#205E65]/20 text-[#205E65] px-4 py-2 text-xs text-center font-medium">
+              Demo mode: sample data in your browser. The full engine could not be reached.
+            </div>
           )}
+          <Header
+            title={getViewTitle()}
+            currentUser={currentUser}
+            onSwitchRole={handleSwitchRole}
+            onLoadDemoDraft={handleLoadDemoDraft}
+          />
 
-          {activeView === "reviews" && (
-            <ReviewsView
-              onSelectReview={handleSelectReview}
-              onNavigateToNewReview={() => handleSetActiveView("new_review")}
-            />
-          )}
+          <main className="flex-1 overflow-y-auto">
+            {activeView === "dashboard" && (
+              <DashboardView
+                onNavigateToReviews={() => handleSetActiveView("reviews")}
+                onNavigateToNewReview={() => handleSetActiveView("new_review")}
+                onNavigateToFacts={() => handleSetActiveView("facts")}
+                onNavigateToGuidelines={() => handleSetActiveView("guidelines")}
+                onSelectReview={handleSelectReview}
+              />
+            )}
 
-          {activeView === "new_review" && (
-            <NewReviewView
-              onReviewCreated={(id) => handleSelectReview(id)}
-              onCancel={() => handleSetActiveView("reviews")}
-            />
-          )}
+            {activeView === "reviews" && (
+              <ReviewsView
+                onSelectReview={handleSelectReview}
+                onNavigateToNewReview={() => handleSetActiveView("new_review")}
+              />
+            )}
 
-          {activeView === "review_detail" && selectedReviewId && (
-            <ReviewDetailView
-              reviewId={selectedReviewId}
-              currentUser={currentUser}
-              onBack={() => handleSetActiveView("reviews")}
-              onReviewUpdated={() => {}}
-            />
-          )}
+            {activeView === "new_review" && (
+              <NewReviewView
+                onReviewCreated={(id) => handleSelectReview(id)}
+                onCancel={() => handleSetActiveView("reviews")}
+              />
+            )}
 
-          {activeView === "guidelines" && (
-            <GuidelinesView
-              currentUser={currentUser}
-              onNavigateToCompare={() => handleSetActiveView("version_compare")}
-            />
-          )}
+            {activeView === "review_detail" && selectedReviewId && (
+              <ReviewDetailView
+                reviewId={selectedReviewId}
+                currentUser={currentUser}
+                onBack={() => handleSetActiveView("reviews")}
+                onReviewUpdated={() => {}}
+              />
+            )}
 
-          {activeView === "version_compare" && (
-            <VersionCompareView onBack={() => handleSetActiveView("guidelines")} />
-          )}
+            {activeView === "guidelines" && (
+              <GuidelinesView
+                currentUser={currentUser}
+                onNavigateToCompare={() => handleSetActiveView("version_compare")}
+              />
+            )}
 
-          {activeView === "facts" && <FactsLedgerView currentUser={currentUser} />}
+            {activeView === "version_compare" && (
+              <VersionCompareView onBack={() => handleSetActiveView("guidelines")} />
+            )}
 
-          {activeView === "terminology" && <TerminologyView currentUser={currentUser} />}
+            {activeView === "facts" && <FactsLedgerView currentUser={currentUser} />}
 
-          {activeView === "assets" && <BrandAssetsView currentUser={currentUser} />}
+            {activeView === "terminology" && <TerminologyView currentUser={currentUser} />}
 
-          {activeView === "approvals" && (
-            <ApprovalQueueView
-              currentUser={currentUser}
-              onSelectReview={handleSelectReview}
-            />
-          )}
+            {activeView === "assets" && <BrandAssetsView currentUser={currentUser} />}
 
-          {activeView === "audit" && <AuditLogView />}
+            {activeView === "approvals" && (
+              <ApprovalQueueView
+                currentUser={currentUser}
+                onSelectReview={handleSelectReview}
+              />
+            )}
 
-          {activeView === "team" && <TeamView currentUser={currentUser} />}
+            {activeView === "audit" && <AuditLogView />}
 
-          {activeView === "settings" && <SettingsView />}
-        </main>
+            {activeView === "team" && <TeamView currentUser={currentUser} />}
+
+            {activeView === "settings" && <SettingsView />}
+          </main>
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }

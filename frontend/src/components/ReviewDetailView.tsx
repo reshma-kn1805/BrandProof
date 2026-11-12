@@ -40,6 +40,7 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
   const [selectedRevisionIndex, setSelectedRevisionIndex] = useState<number>(-1);
   const [decisionNotes, setDecisionNotes] = useState("");
   const [decisionModal, setDecisionModal] = useState<"approved" | "changes_requested" | "rejected" | null>(null);
+  const [decisionSubmitting, setDecisionSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -88,6 +89,7 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
 
   const handleDecision = async (decision: "approved" | "changes_requested" | "rejected") => {
     try {
+      setDecisionSubmitting(true);
       const updated = await api.decideReview(reviewId, decision, decisionNotes);
       setReview(updated);
       setDecisionModal(null);
@@ -95,6 +97,8 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
       if (onReviewUpdated) onReviewUpdated();
     } catch (err: any) {
       alert(err.message || "Failed to record approval decision");
+    } finally {
+      setDecisionSubmitting(false);
     }
   };
 
@@ -107,10 +111,28 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
     );
   }
 
-  if (!review) {
+  if (errorMsg || !review) {
     return (
-      <div className="p-8 text-center text-xs text-[#63777C]">
-        Review record not found.
+      <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
+        <AlertCircle className="w-8 h-8 text-[#B91C1C]" />
+        <h3 className="text-sm font-bold text-[#172C32]">Failed to Load Review Record</h3>
+        <p className="text-xs text-[#63777C] max-w-sm">
+          {errorMsg || "The requested content review could not be retrieved from the database."}
+        </p>
+        <div className="flex items-center gap-2 mt-1">
+          <button
+            onClick={loadReviewDetails}
+            className="px-3.5 py-1.5 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded shadow-sm transition-colors"
+          >
+            Retry Request
+          </button>
+          <button
+            onClick={onBack}
+            className="px-3.5 py-1.5 bg-[#EAF2F3] hover:bg-[#DCE7E8] text-[#172C32] text-xs font-semibold rounded border border-[#DCE7E8] transition-colors"
+          >
+            Back to Reviews
+          </button>
+        </div>
       </div>
     );
   }
@@ -480,10 +502,14 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                       <button
                         onClick={() => handleAction(finding.id, "accept")}
                         disabled={actionLoading === finding.id}
-                        className="flex-1 py-1.5 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded shadow-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
+                        className="flex-1 py-1.5 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded shadow-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
                       >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Accept & Recheck</span>
+                        {actionLoading === finding.id ? (
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                        <span>{actionLoading === finding.id ? "Applying..." : "Accept & Recheck"}</span>
                       </button>
 
                       <button
@@ -597,10 +623,14 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                 Cancel
               </button>
               <button
+                disabled={decisionSubmitting}
                 onClick={() => handleDecision(decisionModal)}
-                className="px-4 py-1.5 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded shadow-sm"
+                className="px-4 py-1.5 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded shadow-sm flex items-center gap-1.5 disabled:opacity-50"
               >
-                Confirm Decision
+                {decisionSubmitting ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : null}
+                <span>{decisionSubmitting ? "Recording..." : "Confirm Decision"}</span>
               </button>
             </div>
           </div>

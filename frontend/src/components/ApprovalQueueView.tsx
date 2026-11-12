@@ -53,10 +53,25 @@ export const ApprovalQueueView: React.FC<ApprovalQueueViewProps> = ({
 
       <div className="bg-white rounded-lg border border-[#DCE7E8] shadow-subtle overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-xs text-[#63777C]">Loading approval queue...</div>
+          <div className="p-12 text-center text-xs text-[#63777C] flex flex-col items-center gap-2">
+            <div className="w-5 h-5 border-2 border-[#328C91] border-t-transparent rounded-full animate-spin"></div>
+            <span>Loading approval queue...</span>
+          </div>
         ) : reviews.length === 0 ? (
-          <div className="p-12 text-center text-xs text-[#63777C]">
-            No submissions awaiting approval. All reviews up to date!
+          <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-[#E8F5E9] flex items-center justify-center text-[#1E7E51]">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-[#172C32]">Approval Queue Clear</h3>
+            <p className="text-xs text-[#63777C] max-w-sm">
+              All submitted campaigns and copy drafts have been audited. No reviews are awaiting human sign-off at this time.
+            </p>
+            <button
+              onClick={loadPending}
+              className="mt-1 px-3.5 py-1.5 bg-[#EAF2F3] hover:bg-[#DCE7E8] text-[#205E65] text-xs font-semibold rounded-md border border-[#DCE7E8] transition-colors"
+            >
+              Refresh Queue
+            </button>
           </div>
         ) : (
           <div className="divide-y divide-[#DCE7E8]">

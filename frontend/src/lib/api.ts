@@ -421,7 +421,8 @@ const mockStore = new MockDataStore();
 
 async function apiFetch<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeoutMs: number = 20000
 ): Promise<T> {
   // If in demo mode, route directly to the client mock store
   if (activeEngineMode === "demo") {
@@ -442,38 +443,53 @@ async function apiFetch<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (res.status === 401) {
-    clearToken();
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("brandproof:session_expired", {
-          detail: "Your session expired",
-        })
-      );
-    }
-    throw new Error("Your session expired");
-  }
+  try {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+      signal: options.signal || controller.signal,
+    });
+    clearTimeout(timer);
 
-  if (!res.ok) {
-    let errorMsg = `Request failed with status ${res.status}`;
-    try {
-      const errData = await res.json();
-      if (errData?.detail) {
-        errorMsg =
-          typeof errData.detail === "string"
-            ? errData.detail
-            : JSON.stringify(errData.detail);
+    if (res.status === 401) {
+      clearToken();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("brandproof:session_expired", {
+            detail: "Your session expired",
+          })
+        );
       }
-    } catch (_) {}
-    throw new Error(errorMsg);
-  }
+      throw new Error("Your session expired");
+    }
 
-  return (await res.json()) as T;
+    if (!res.ok) {
+      let errorMsg = `Request failed with status ${res.status}`;
+      try {
+        const errData = await res.json();
+        if (errData?.error?.message) {
+          errorMsg = errData.error.message;
+        } else if (errData?.detail) {
+          errorMsg =
+            typeof errData.detail === "string"
+              ? errData.detail
+              : JSON.stringify(errData.detail);
+        }
+      } catch (_) {}
+      throw new Error(errorMsg);
+    }
+
+    return (await res.json()) as T;
+  } catch (err: any) {
+    clearTimeout(timer);
+    if (err.name === "AbortError") {
+      throw new Error("Request timed out. Please check your connection and retry.");
+    }
+    throw err;
+  }
 }
 
 function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
