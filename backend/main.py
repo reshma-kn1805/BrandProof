@@ -1,5 +1,7 @@
 import os
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -59,6 +61,60 @@ app.include_router(analytics_router.router)
 app.include_router(audit_router.router)
 app.include_router(users_router.router)
 app.include_router(settings_router.router)
+
+# --- Global Exception Handlers Returning {"error": {"code": "...", "message": "..."}} ---
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    msg = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": f"HTTP_{exc.status_code}",
+                "message": msg
+            },
+            "detail": msg
+        }
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    error_messages = []
+    for err in exc.errors():
+        field = " -> ".join(str(loc) for loc in err.get("loc", []) if loc != "body")
+        raw_msg = err.get("msg", "Invalid value")
+        # Remove Value error, prefix from pydantic custom messages
+        clean_msg = raw_msg.replace("Value error, ", "").strip()
+        if field:
+            error_messages.append(f"{field}: {clean_msg}")
+        else:
+            error_messages.append(clean_msg)
+    full_message = "; ".join(error_messages) if error_messages else "Invalid request data provided."
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": full_message
+            },
+            "detail": full_message
+        }
+    )
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    print(f"[Unhandled Error] {request.method} {request.url.path}: {exc}", flush=True)
+    friendly_msg = "An unexpected server error occurred while processing your request. Please try again or contact support."
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": friendly_msg
+            },
+            "detail": friendly_msg
+        }
+    )
 
 @app.on_event("startup")
 def startup_event():
