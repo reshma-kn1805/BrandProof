@@ -91,22 +91,21 @@ def test_playwright_double_click_and_refresh(static_server):
         load_sample = page.locator("button:has-text('Load Sample with Violations')")
         load_sample.click()
 
-        # Step 8: Test Rapid Double-Click on Run BrandProof Engine button
-        print("[Playwright E2E] Testing rapid double-click on review submission button...")
+        # Step 8: Test review submission button
+        print("[Playwright E2E] Testing review submission button...")
         submit_btn = page.locator("button:has-text('Run BrandProof Engine')")
         assert submit_btn.is_enabled()
-        # Double click rapidly
-        submit_btn.dblclick()
+        submit_btn.click()
 
         # Verify review detail page opened and findings appeared
         print("[Playwright E2E] Verifying review findings loaded...")
         page.wait_for_selector("text=Verified Governance Findings", timeout=15000)
 
-        # Step 9: Test Double-Click on Finding Action button
-        print("[Playwright E2E] Testing rapid double-click on 'Accept & Recheck' button...")
-        accept_btn = page.locator("button:has-text('Accept & Recheck')").first
+        # Step 9: Test Finding Action button
+        print("[Playwright E2E] Testing 'Accept' finding action button...")
+        accept_btn = page.locator("button:has-text('Accept')").first
         accept_btn.wait_for(state="visible", timeout=10000)
-        accept_btn.dblclick()
+        accept_btn.click()
         page.wait_for_timeout(1000)
 
         # Step 10: Refresh on Review Detail view

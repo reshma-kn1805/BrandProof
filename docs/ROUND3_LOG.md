@@ -111,4 +111,47 @@ This document tracks phase-by-phase execution, timestamps, changes, and verifica
   - AI Verification: Mocked verification test confirmed fabricated citations (e.g. Clause 99.9) and quotes not present in content are dropped per the "No citation, no flag" principle. Confirmed AI-assisted findings receive `is_ai_assisted=True` and `✨ AI-Assisted` badges in UI. Noted `GEMINI_API_KEY` was not present in environment during run.
   - Frontend static export (`NEXT_EXPORT=true npm run build`): Compiled and exported successfully with 0 errors.
 
+---
+
+## [Phase 5] Improvement 3: Confidential Mode, Tamper-Evident Audit Log & Cryptographic PDF Report
+- **Timestamp**: 2026-11-12 18:40:00 IST
+- **Status**: Completed & Verified
+- **Key Changes**:
+  - `backend/redaction/` (`backend/redaction/redactor.py`): Implemented regex and dictionary tokenization for email addresses, Indian (+91, 0, 10-digit) and international phone numbers, currencies (`₹`, `$`, `€`, `£`), 8+ digit sequences, `[[bracketed]]` confidential phrases, and organization-defined custom confidential terms. Maintained per-request token map for bidirectional restoration. Pre-flight redaction strips sensitive PII before any external AI call and restores tokens in results before database persistence. Token map is strictly kept internal and never sent to external AI providers.
+  - `backend/audit_chain.py`: Implemented cryptographic SHA-256 tamper-evident hash chain (`canonical_entry_dict`, `compute_entry_hash`, `record_audit_log`, `backfill_audit_chain`, `verify_audit_chain`). Enforced sequential atomic appends in database transactions (`entry_hash = SHA-256(canonical_json + prev_hash)`). Added `GET /api/audit/verify` which recomputes the entire ledger from genesis to head and reports `{valid: bool, entries: n, head: hash, first_broken_entry: id|null}`.
+  - `backend/models.py` & `backend/database.py`:
+    - Added `prev_hash` (VARCHAR 64) and `entry_hash` (VARCHAR 64) to `AuditLog`.
+    - Added `confidential_mode` (BOOLEAN), `redaction_summary` (TEXT/JSON), and `report_fingerprint` (VARCHAR 64) to `ContentReview`.
+    - Added `confidential_mode_default` (BOOLEAN) and `confidential_terms` (TEXT/JSON) to `Organization`.
+    - Added `AICallLog` (`ai_calls` table) capturing tenant organization ID, review ID, provider, model, redaction flag, redaction entity counts, latency (ms), and call status (strictly excluding raw prompt/content text).
+    - Updated `migrate_columns()` with idempotent ALTER TABLE statements and automatic genesis backfilling.
+  - `backend/report_generator.py`: Built ReportLab PDF generator (`GET /api/reviews/{id}/report.pdf`). Generates structured executive compliance report including title, status, compliance score, before & after text evolution, findings with clause/fact evidence citations, human decisions and timestamps, comments, document revisions, confidential mode & AI disclosure, and cryptographic SHA-256 fingerprint computed over canonical report data combined with the audit chain head. Stores fingerprint on `ContentReview.report_fingerprint`.
+  - `backend/routers/reviews_router.py`:
+    - Added `POST /api/reviews/redaction-preview` and `GET /api/reviews/redaction-preview` returning entity counts and redacted preview text.
+    - Added `confidential_mode` toggle handling in `/submit`.
+    - Added `GET /api/reviews/{id}/report.pdf` returning ReportLab PDF with `X-Report-Fingerprint` header.
+    - Added `GET /api/reviews/verify-report` and `POST /api/reports/verify` for public verification.
+  - `backend/routers/settings_router.py`: Added `GET/PATCH /api/settings/workspace` managing tenant confidential mode defaults and custom confidential terms.
+  - `backend/routers/audit_router.py`: Added `GET /api/audit/verify` (ledger integrity check) and `GET /api/audit/ai-calls` (AI disclosure transparency log).
+  - `backend/main.py`: Registered verification alias endpoints `GET/POST /api/reports/verify`.
+  - `backend/requirements.txt`: Added `reportlab>=4.0.0`.
+  - `frontend/src/lib/api.ts`: Added types (`AuditVerifyResult`, `RedactionPreviewResult`, `AICallLogEntry`, `ReportVerifyResult`), exported `activeEngineMode`, added API methods (`getRedactionPreview`, `getReportPdfUrl`, `verifyReport`, `verifyAuditChain`, `getAICalls`, `updateWorkspaceSettings`), and mock store support.
+  - `frontend/src/components/NewReviewView.tsx`: Added per-draft Confidential Mode toggle, "What will be sent" preview modal with entity counts, and sample confidential draft preset button.
+  - `frontend/src/components/ReviewDetailView.tsx`: Added "Export audit report" button (disabled in demo mode with tooltip: *"Available when connected to the full engine"*), confidential mode badge, and report fingerprint display.
+  - `frontend/src/components/AuditLogView.tsx`: Converted "Audit Integrity" badge to dynamic real verification (`api.verifyAuditChain()`), displaying entry count and head hash or broken entry alert, plus truncated SHA-256 entry hashes in table.
+  - `frontend/src/components/VerifyReportView.tsx` (new): Created public report verification view allowing entry of review ID or SHA-256 fingerprint, displaying tamper-evident match card with link to review.
+  - `frontend/src/components/SettingsView.tsx`: Added workspace default confidential toggle, custom terms editor, and AI Call Transparency & Disclosure Log table.
+  - `frontend/src/components/Sidebar.tsx` & `frontend/src/app/page.tsx`: Added `verify_report` to `ActiveView` and sidebar navigation.
+  - `tests/test_phase5_features.py`: Added 4 unit and integration tests:
+    1. Redaction unit tests (emails, Indian and int'l phones, currencies, 8+ digits, `[[bracketed]]`, custom terms, bidirectional round trip).
+    2. Tamper-evident audit hash-chain tests (tamper row details directly and verify `first_broken_entry` identification and restoration).
+    3. PDF report test (parses generated PDF text with `pypdf`, validates required sections, headers, scores, findings, and fingerprint match).
+    4. "Done when" E2E scenario (draft with email and phone reviewed with confidential mode on, preview shows both redacted, and exported PDF contains review record).
+- **Verification Results**:
+  - `python -m pytest tests -q`: 53 passed, 1049 warnings in 29.22s.
+  - `python -m pytest tests/test_phase5_features.py -v`: 4 passed in 5.17s.
+  - Playwright E2E (`tests/test_playwright_e2e.py`): 1 passed in 12.07s.
+  - Frontend static export (`NEXT_EXPORT=true npm run build`): Compiled and exported successfully with 0 errors (4/4 pages exported).
+
+
 

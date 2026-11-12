@@ -84,3 +84,4 @@ def test_all_permutations_accept_golden_sample(creator_auth, order_indices):
     assert final_data["requires_human_attention"] is False
     assert len([f for f in final_data["findings"] if f["decision_status"] == "pending"]) == 0
     assert final_data["current_content"] == EXPECTED_GOLDEN_TEXT
+
