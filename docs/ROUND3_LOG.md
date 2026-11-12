@@ -74,3 +74,41 @@ This document tracks phase-by-phase execution, timestamps, changes, and verifica
     - Page refresh on every page: Verified persistent across Guidelines, Facts, Terminology, Reviews, and Review Detail.
   - Frontend static export (`NEXT_EXPORT=true npm run build`): Compiled and exported successfully with 0 errors.
 
+---
+
+## [Phase 4] Feature Completion, Suggestion Engine & Human Workflows
+- **Timestamp**: 2026-11-12 12:45:00 IST
+- **Status**: Completed & Verified
+- **Key Changes**:
+  - `backend/engine/text_replacer.py`: Implemented phrase-level text replacement with grammatical fluency normalization: automatically eliminates duplicate adjacent words (e.g. `Nila Nila` -> `Nila`) and multi-word phrases (e.g. `healthy breakfast healthy breakfast` -> `healthy breakfast`), fixes punctuation spacing (`!` / `.` / `,`), and enforces sentence capitalization.
+  - `backend/engine/deterministic_engine.py`: Updated scanning rules to target full phrase/clause spans: brand prefix expansion for terminology (`Nila Millet-Mix` -> `Nila Millet Mix`), trailing noun phrase expansion for superlatives (`India's #1 healthy breakfast` -> `a healthy breakfast`), sentence-cased fact-backed guarantee replacements (`Made with 5 whole millets.`), and clean imperative tone correction (`Discover our blend.`).
+  - `backend/engine/suggestion_prechecker.py`: Implemented pre-flight suggestion validation: dry-runs candidate replacements against the deterministic engine, validates numerical and health claims against approved active facts in the facts ledger (`F-12`), and withholds unsafe suggestions as `"Needs a human look"` if new violations or unbacked claims are introduced.
+  - `backend/engine/review_pipeline.py`: Integrated `pre_check_suggestions()`, labeled findings with `engine_source` ("deterministic" vs "ai") and `is_ai_assisted`, and flagged findings as `needs_human_look` when suggestions are withheld.
+  - `backend/models.py` & `backend/schemas.py`: Added `reject_reason`, `reject_note`, `engine_source`, `is_ai_assisted`, `needs_human_look` to `ReviewFinding`; added `finding_id` foreign key and `comment_type` ("general", "finding", "ask_manager") to `ReviewComment`.
+  - `backend/database.py` & `backend/main.py`: Added `migrate_columns()` to idempotently execute `ALTER TABLE ADD COLUMN` for SQLite and PostgreSQL across restarts.
+  - `backend/routers/reviews_router.py`:
+    - Enforced mandatory `reject_reason` validation on finding rejections with persistent audit logging.
+    - Added real-time re-verification on creator `edit` action, rejecting edits with HTTP 400 if they introduce brand violations.
+    - Switched finding replacement to `apply_clean_replacement()`.
+    - Extended `/comments` endpoint with finding linkage (`finding_id`) and `"ask_manager"` thread creation, setting review `requires_human_attention=True` and logging `ASK_MANAGER_THREAD`.
+  - `frontend/src/lib/api.ts`: Updated API interfaces and mock store for reject reasons, edit verification, finding comments, and Ask Manager threads in demo mode.
+  - `frontend/src/components/ReviewDetailView.tsx`:
+    - Added Reject Finding Modal with reason selector ("False positive", "Approved exception", "Contextually permitted", "Will rephrase manually", "Other") and optional note.
+    - Added Edit Finding Modal with live error display and re-verification feedback.
+    - Displayed `✨ AI-Assisted` badges and `Needs a human look` labels with withheld rewrites.
+    - Added inline finding comment and "Ask Manager" discussion thread component.
+    - Enhanced comments feed with `Ask Manager Thread` and `Finding #{id}` badges.
+  - `tests/test_golden_suggestions.py`: Added comprehensive permutation test suite verifying all 24 ordering permutations of accepting 4 sample findings result in 100% compliance score, 0 violations, and exact golden text: `"Nila Millet Mix is a healthy breakfast! Made with 5 whole millets. Discover our blend."`.
+  - `tests/test_phase4_features.py`: Added 5 unit tests for suggestion withholding on unbacked claims, mandatory reject reason validation, custom edit re-verification rejection, finding comments and Ask Manager threads, and AI verifier dropping fabricated citations/quotes.
+- **Verification Results**:
+  - `python -m pytest tests -q`: 49 passed, 1030 warnings in 34.92s.
+  - All 24 permutations in `tests/test_golden_suggestions.py` passed (25/25 tests).
+  - Real backend sample end-to-end execution:
+    - Input: `"Nila Millet-Mix is India's #1 healthy breakfast! Guaranteed to cut sugar cravings. Buy now."`
+    - Initial violations: 4 (Score: 20.0).
+    - Sequential acceptance of all 4 findings -> Final Content: `"Nila Millet Mix is a healthy breakfast! Made with 5 whole millets. Discover our blend."`
+    - Final violations: 0 (Score: 100.0).
+  - AI Verification: Mocked verification test confirmed fabricated citations (e.g. Clause 99.9) and quotes not present in content are dropped per the "No citation, no flag" principle. Confirmed AI-assisted findings receive `is_ai_assisted=True` and `✨ AI-Assisted` badges in UI. Noted `GEMINI_API_KEY` was not present in environment during run.
+  - Frontend static export (`NEXT_EXPORT=true npm run build`): Compiled and exported successfully with 0 errors.
+
+
