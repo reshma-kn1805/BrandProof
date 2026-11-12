@@ -206,11 +206,17 @@ class ReviewFinding(Base):
     # verified_clause, verified_fact, expired_fact_detected, pending_human_review, abstain
     evidence_source = Column(Text, nullable=True)
     decision_status = Column(String(50), default="pending")  # pending, accepted, edited, rejected
+    reject_reason = Column(String(100), nullable=True)
+    reject_note = Column(Text, nullable=True)
+    engine_source = Column(String(50), default="deterministic")  # deterministic, ai
+    is_ai_assisted = Column(Boolean, default=False)
+    needs_human_look = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     review = relationship("ContentReview", back_populates="findings")
     clause = relationship("GuidelineClause")
     fact = relationship("ApprovedFact")
+    comments = relationship("ReviewComment", back_populates="finding")
 
 
 class ReviewComment(Base):
@@ -218,12 +224,15 @@ class ReviewComment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     review_id = Column(Integer, ForeignKey("content_reviews.id"), nullable=False, index=True)
+    finding_id = Column(Integer, ForeignKey("review_findings.id"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    comment_type = Column(String(50), default="general")  # general, finding, ask_manager
     message = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     review = relationship("ContentReview", back_populates="comments")
     user = relationship("User")
+    finding = relationship("ReviewFinding", back_populates="comments")
 
 
 class ApprovalDecision(Base):

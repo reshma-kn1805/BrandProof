@@ -282,6 +282,8 @@ class ReviewSubmission(BaseModel):
 class FindingAction(BaseModel):
     action: str  # "accept", "edit", "reject"
     edited_text: Optional[str] = None
+    reject_reason: Optional[str] = None
+    reject_note: Optional[str] = None
 
     @field_validator("action")
     @classmethod
@@ -296,6 +298,11 @@ class FindingAction(BaseModel):
     @classmethod
     def val_edited_text(cls, v: Optional[str]) -> Optional[str]:
         return _validate_trimmed(v, "Edited text", max_len=50000, required=False)
+
+    @field_validator("reject_reason", "reject_note")
+    @classmethod
+    def val_reject_info(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_trimmed(v, "Reject metadata", max_len=2000, required=False)
 
 class ReviewFindingOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -316,6 +323,11 @@ class ReviewFindingOut(BaseModel):
     verification_status: str
     evidence_source: Optional[str] = None
     decision_status: str
+    reject_reason: Optional[str] = None
+    reject_note: Optional[str] = None
+    engine_source: str = "deterministic"
+    is_ai_assisted: bool = False
+    needs_human_look: bool = False
     created_at: datetime.datetime
 
 class DocumentRevisionOut(BaseModel):
@@ -331,17 +343,30 @@ class DocumentRevisionOut(BaseModel):
 
 class ReviewCommentCreate(BaseModel):
     message: str
+    finding_id: Optional[int] = None
+    comment_type: Optional[str] = "general"
 
     @field_validator("message")
     @classmethod
     def val_comment(cls, v: str) -> str:
         return _validate_trimmed(v, "Comment message", max_len=5000, required=True) or ""
 
+    @field_validator("comment_type")
+    @classmethod
+    def val_comment_type(cls, v: Optional[str]) -> str:
+        s = _validate_trimmed(v, "Comment type", max_len=50, required=False) or "general"
+        if s not in ["general", "finding", "ask_manager"]:
+            return "general"
+        return s
+
 class ReviewCommentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    review_id: int
     user_id: int
+    finding_id: Optional[int] = None
+    comment_type: str = "general"
     user_name: str
     user_role: str
     message: str

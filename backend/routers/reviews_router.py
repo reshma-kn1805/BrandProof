@@ -14,6 +14,7 @@ from backend.schemas import (
 )
 from backend.document_parser import DocumentParser
 from backend.engine.review_pipeline import ReviewPipeline
+from backend.engine.text_replacer import apply_clean_replacement
 from backend.rate_limiter import submit_limiter
 
 router = APIRouter(prefix="/api/reviews", tags=["Content Reviews"])
@@ -129,6 +130,9 @@ async def submit_content_text(
                 confidence=f["confidence"],
                 verification_status=f["verification_status"],
                 evidence_source=f.get("evidence_source"),
+                engine_source=f.get("engine_source", "deterministic"),
+                is_ai_assisted=f.get("is_ai_assisted", False),
+                needs_human_look=f.get("needs_human_look", False),
                 decision_status="pending"
             )
             db.add(finding)
@@ -210,23 +214,55 @@ async def handle_finding_action(
     replacement_text = None
 
     if action == "accept":
+        if not finding.suggested_correction:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot accept finding without an automated suggested correction. Please use Edit to specify your correction."
+            )
         finding.decision_status = "accepted"
         replacement_text = finding.suggested_correction
     elif action == "edit":
+        if not action_data.edited_text or not action_data.edited_text.strip():
+            raise HTTPException(status_code=400, detail="Edited correction text cannot be empty.")
+        clean_edit = action_data.edited_text.strip()
+
+        # Re-verify the creator's proposed edit before accepting
+        candidate_content = apply_clean_replacement(review.current_content, finding.original_text, clean_edit)
+        pipeline = ReviewPipeline(db, current_user.organization_id)
+        test_res = await pipeline.execute(candidate_content)
+
+        # Check if the proposed edit still triggers brand violations
+        offending = [
+            f for f in test_res["findings"]
+            if f["original_text"].lower() in clean_edit.lower() or clean_edit.lower() in f["original_text"].lower()
+        ]
+        if offending:
+            raise HTTPException(
+                status_code=400,
+                detail=f"The proposed edit '{clean_edit}' failed brand verification: {offending[0]['explanation']} Please revise your correction."
+            )
+
         finding.decision_status = "edited"
-        finding.edited_correction = action_data.edited_text
-        replacement_text = action_data.edited_text
+        finding.edited_correction = clean_edit
+        replacement_text = clean_edit
     elif action == "reject":
+        if not action_data.reject_reason or not action_data.reject_reason.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Rejecting a finding requires a reason (dropdown selection)."
+            )
         finding.decision_status = "rejected"
+        finding.reject_reason = action_data.reject_reason.strip()
+        finding.reject_note = action_data.reject_note.strip() if action_data.reject_note else None
     else:
         raise HTTPException(status_code=400, detail="Invalid action. Must be accept, edit, or reject.")
 
     db.flush()
 
     # If text changed, update content, create new revision, and re-review
-    if replacement_text and finding.original_text in review.current_content:
-        # Perform replacement
-        updated_content = review.current_content.replace(finding.original_text, replacement_text, 1)
+    if replacement_text and (finding.original_text in review.current_content or finding.original_text.lower() in review.current_content.lower()):
+        # Perform grammatical phrase-level replacement
+        updated_content = apply_clean_replacement(review.current_content, finding.original_text, replacement_text)
         review.current_content = updated_content
 
         # Count current revisions
@@ -271,6 +307,9 @@ async def handle_finding_action(
                 confidence=f["confidence"],
                 verification_status=f["verification_status"],
                 evidence_source=f.get("evidence_source"),
+                engine_source=f.get("engine_source", "deterministic"),
+                is_ai_assisted=f.get("is_ai_assisted", False),
+                needs_human_look=f.get("needs_human_look", False),
                 decision_status="pending"
             )
             db.add(new_f)
@@ -284,7 +323,9 @@ async def handle_finding_action(
         details={
             "action": action,
             "original_text": finding.original_text,
-            "replacement": replacement_text
+            "replacement": replacement_text,
+            "reject_reason": finding.reject_reason,
+            "reject_note": finding.reject_note
         }
     )
     db.add(audit)
@@ -307,9 +348,26 @@ def add_comment(
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
 
+    if payload.finding_id:
+        finding = db.query(ReviewFinding).filter(
+            ReviewFinding.id == payload.finding_id,
+            ReviewFinding.review_id == review.id
+        ).first()
+        if not finding:
+            raise HTTPException(status_code=404, detail="Finding not found for this review")
+
+    comment_type = payload.comment_type or "general"
+    if comment_type == "ask_manager":
+        review.requires_human_attention = True
+        action_name = "ASK_MANAGER_THREAD"
+    else:
+        action_name = "ADD_REVIEW_COMMENT"
+
     comm = ReviewComment(
         review_id=review.id,
+        finding_id=payload.finding_id,
         user_id=current_user.id,
+        comment_type=comment_type,
         message=payload.message
     )
     db.add(comm)
@@ -317,10 +375,14 @@ def add_comment(
     audit = AuditLog(
         organization_id=current_user.organization_id,
         user_id=current_user.id,
-        action="ADD_REVIEW_COMMENT",
+        action=action_name,
         target_type="ContentReview",
         target_id=review.id,
-        details={"message": payload.message[:100]}
+        details={
+            "finding_id": payload.finding_id,
+            "comment_type": comment_type,
+            "message": payload.message[:200]
+        }
     )
     db.add(audit)
     db.commit()
@@ -328,7 +390,10 @@ def add_comment(
 
     return ReviewCommentOut(
         id=comm.id,
+        review_id=comm.review_id,
+        finding_id=comm.finding_id,
         user_id=comm.user_id,
+        comment_type=comm.comment_type,
         user_name=current_user.full_name,
         user_role=current_user.role,
         message=comm.message,

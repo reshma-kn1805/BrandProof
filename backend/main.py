@@ -120,6 +120,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 def startup_event():
     # Create tables and auto-seed demo workspace
     Base.metadata.create_all(bind=engine)
+    from backend.database import migrate_columns
+    migrate_columns(engine)
     try:
         seed_database()
     except Exception as e:
