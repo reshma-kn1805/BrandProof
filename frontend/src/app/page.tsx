@@ -8,6 +8,7 @@ import { ReviewsView } from "../components/ReviewsView";
 import { ReviewDetailView } from "../components/ReviewDetailView";
 import { NewReviewView } from "../components/NewReviewView";
 import { GuidelinesView } from "../components/GuidelinesView";
+import { GuidelineHealthView } from "../components/GuidelineHealthView";
 import { VersionCompareView } from "../components/VersionCompareView";
 import { FactsLedgerView } from "../components/FactsLedgerView";
 import { TerminologyView } from "../components/TerminologyView";
@@ -400,6 +401,15 @@ export default function Home() {
               <GuidelinesView
                 currentUser={currentUser}
                 onNavigateToCompare={() => handleSetActiveView("version_compare")}
+              />
+            )}
+
+            {activeView === "guideline_health" && (
+              <GuidelineHealthView
+                currentUser={currentUser}
+                onNavigateToVersionCompare={() =>
+                  handleSetActiveView("version_compare")
+                }
               />
             )}
 

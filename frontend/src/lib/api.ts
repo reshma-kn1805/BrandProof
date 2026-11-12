@@ -262,6 +262,85 @@ export interface ReportVerifyResult {
   message?: string;
 }
 
+// --- Phase 6: Guideline Health & Intelligence Interfaces ---
+export interface GuidelineHealthKPIs {
+  total_clauses: number;
+  unclear_clauses_count: number;
+  conflicting_pairs_count: number;
+  global_override_rate: number;
+  total_decisions_recorded: number;
+  has_demo_history: boolean;
+  includes_demo_history: boolean;
+}
+
+export interface GuidelineHealthClause {
+  clause_id: number;
+  clause_number: string;
+  title: string;
+  description: string;
+  category: string;
+  severity: string;
+  total_triggered: number;
+  total_decisions: number;
+  accepted_count: number;
+  edited_count: number;
+  rejected_count: number;
+  override_rate: number;
+  reasons_breakdown: Record<string, number>;
+  health_status: "unclear" | "healthy" | "insufficient_data";
+  is_unclear: boolean;
+}
+
+export interface GuidelineHealthConflict {
+  clause_a_number: string;
+  clause_a_title: string;
+  clause_b_number: string;
+  clause_b_title: string;
+  reviews_count: number;
+  review_ids: number[];
+  example_quotations: Array<{
+    review_id: number;
+    review_title: string;
+    overlapping_text: string;
+    clause_a_text: string;
+    clause_b_text: string;
+  }>;
+}
+
+export interface GuidelineHealthResponse {
+  kpis: GuidelineHealthKPIs;
+  clauses: GuidelineHealthClause[];
+  conflicts: GuidelineHealthConflict[];
+}
+
+export interface ClauseBacktestResult {
+  clause_number: string;
+  original_title: string;
+  proposed_title: string;
+  reviews_analyzed: number;
+  summary: {
+    added: number;
+    removed: number;
+    unchanged: number;
+    net_difference: number;
+  };
+  examples: {
+    added: Array<{ review_id: number; review_title: string; newly_flagged_text: string; explanation: string }>;
+    removed: Array<{ review_id: number; review_title: string; text_no_longer_flagged: string; explanation: string }>;
+  };
+  notice: string;
+}
+
+export interface ClausePublishResult {
+  success: boolean;
+  new_version_id: number;
+  version_number: string;
+  changelog: string;
+  clause_id?: number;
+  clause_number: string;
+  document_id: number;
+}
+
 // Token helper
 export const getToken = (): string | null => {
   if (typeof window === "undefined") return null;
@@ -792,6 +871,155 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
     return mockStore.clauses as unknown as T;
   }
 
+  if (endpoint.startsWith("/api/guidelines/health")) {
+    const includeDemo = !endpoint.includes("include_demo_history=false");
+    return {
+      kpis: {
+        total_clauses: 5,
+        unclear_clauses_count: 1,
+        conflicting_pairs_count: 1,
+        global_override_rate: 62.5,
+        total_decisions_recorded: 12,
+        has_demo_history: true,
+        includes_demo_history: includeDemo,
+      },
+      clauses: [
+        {
+          clause_id: 4,
+          clause_number: "3.6",
+          title: "Unsubstantiated Guarantee",
+          description: "Never make absolute claims or unprovable promises such as '100% cure', 'guaranteed results', or 'miracle'.",
+          category: "Tone & Claims",
+          severity: "warning",
+          total_triggered: 8,
+          total_decisions: 8,
+          accepted_count: 2,
+          edited_count: 2,
+          rejected_count: 4,
+          override_rate: 75.0,
+          reasons_breakdown: {
+            "Contextually permitted": 3,
+            "Approved exception": 1,
+            "Manually edited correction": 2
+          },
+          health_status: "unclear",
+          is_unclear: true,
+        },
+        {
+          clause_id: 2,
+          clause_number: "3.4",
+          title: "Superlative Claims",
+          description: "Do not use 'India\\'s #1', 'Best in class', or similar rankings without independent audit source.",
+          category: "Claims",
+          severity: "warning",
+          total_triggered: 5,
+          total_decisions: 4,
+          accepted_count: 3,
+          edited_count: 1,
+          rejected_count: 0,
+          override_rate: 25.0,
+          reasons_breakdown: { "Manually edited correction": 1 },
+          health_status: "healthy",
+          is_unclear: false,
+        },
+        {
+          clause_id: 1,
+          clause_number: "2.1",
+          title: "Brand Name Formatting",
+          description: "Use 'Nila Millet Mix', never 'Nila Millet-Mix' or lowercase.",
+          category: "Terminology",
+          severity: "critical",
+          total_triggered: 6,
+          total_decisions: 5,
+          accepted_count: 5,
+          edited_count: 0,
+          rejected_count: 0,
+          override_rate: 0.0,
+          reasons_breakdown: {},
+          health_status: "healthy",
+          is_unclear: false,
+        }
+      ],
+      conflicts: [
+        {
+          clause_a_number: "3.4",
+          clause_a_title: "Superlative Claims",
+          clause_b_number: "3.6",
+          clause_b_title: "Unsubstantiated Guarantee",
+          reviews_count: 4,
+          review_ids: [101, 102, 103, 104],
+          example_quotations: [
+            {
+              review_id: 101,
+              review_title: "Market Dominance Campaign",
+              overlapping_text: "India's #1 guaranteed health mix",
+              clause_a_text: "India's #1 guaranteed",
+              clause_b_text: "guaranteed health mix"
+            }
+          ]
+        }
+      ]
+    } as unknown as T;
+  }
+
+  if (endpoint.includes("/backtest")) {
+    let bodyObj: any = {};
+    if (options.body && typeof options.body === "string") {
+      try { bodyObj = JSON.parse(options.body); } catch (_) {}
+    }
+    return {
+      clause_number: "3.6",
+      original_title: "Unsubstantiated Guarantee",
+      proposed_title: bodyObj.proposed_title || "Substantiated Outcome Claims",
+      reviews_analyzed: 12,
+      summary: {
+        added: 1,
+        removed: 5,
+        unchanged: 1,
+        net_difference: -4
+      },
+      examples: {
+        added: [
+          {
+            review_id: 103,
+            review_title: "Social Media Snippet",
+            newly_flagged_text: "clinical research",
+            explanation: "Flagged by proposed rule: 'clinical research'"
+          }
+        ],
+        removed: [
+          {
+            review_id: 101,
+            review_title: "Organic Morning",
+            text_no_longer_flagged: "guaranteed to",
+            explanation: "Permitted under revised criteria."
+          }
+        ]
+      },
+      notice: "Backtesting covers deterministic rule-based checks only against historical content drafts."
+    } as unknown as T;
+  }
+
+  if (endpoint.includes("/publish-revision")) {
+    let bodyObj: any = {};
+    if (options.body && typeof options.body === "string") {
+      try { bodyObj = JSON.parse(options.body); } catch (_) {}
+    }
+    return {
+      success: true,
+      new_version_id: 3,
+      version_number: "3.0",
+      changelog: bodyObj.changelog || "Revised clause criteria via Guideline Health Intelligence",
+      clause_id: 4,
+      clause_number: "3.6",
+      document_id: 1
+    } as unknown as T;
+  }
+
+  if (endpoint.startsWith("/api/guidelines/seed-demo-history")) {
+    return { status: "ok", seeded_reviews: 12 } as unknown as T;
+  }
+
   if (endpoint.startsWith("/api/guidelines/compare-versions")) {
     return {
       document_title: "Nila Foods Brand & Marketing Compliance Guidelines",
@@ -1065,6 +1293,28 @@ export const api = {
       method: "POST",
       body: formData,
     }),
+  getGuidelineHealth: (includeDemoHistory: boolean = true) =>
+    apiFetch<GuidelineHealthResponse>(
+      `/api/guidelines/health?include_demo_history=${includeDemoHistory}`
+    ),
+  backtestClause: (clauseId: number, data: any) =>
+    apiFetch<ClauseBacktestResult>(
+      `/api/guidelines/clauses/${clauseId}/backtest`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    ),
+  publishRevisedClause: (clauseId: number, data: any) =>
+    apiFetch<ClausePublishResult>(
+      `/api/guidelines/clauses/${clauseId}/publish-revision`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    ),
+  seedDemoHistory: () =>
+    apiFetch<any>("/api/guidelines/seed-demo-history", { method: "POST" }),
 
   // Facts
   getFacts: (status?: string) =>

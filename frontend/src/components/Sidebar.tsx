@@ -14,6 +14,7 @@ import {
   LogOut,
   ShieldAlert,
   GitCompare,
+  Activity,
 } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { User } from "../lib/api";
@@ -23,6 +24,7 @@ export type ActiveView =
   | "reviews"
   | "new_review"
   | "guidelines"
+  | "guideline_health"
   | "version_compare"
   | "facts"
   | "terminology"
@@ -53,6 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: "approvals", label: "Approval Queue", icon: CheckSquare },
     { section: "GOVERNANCE REPOSITORY" },
     { id: "guidelines", label: "Brand Guidelines", icon: BookOpen },
+    { id: "guideline_health", label: "Guideline Health", icon: Activity },
     { id: "version_compare", label: "Version Comparison", icon: GitCompare },
     { id: "facts", label: "Approved Facts Ledger", icon: Scale },
     { id: "terminology", label: "Terminology Rules", icon: SpellCheck },
