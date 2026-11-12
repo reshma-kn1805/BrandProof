@@ -1,6 +1,6 @@
 import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import (
@@ -14,6 +14,7 @@ from backend.schemas import (
 )
 from backend.document_parser import DocumentParser
 from backend.engine.review_pipeline import ReviewPipeline
+from backend.rate_limiter import submit_limiter
 
 router = APIRouter(prefix="/api/reviews", tags=["Content Reviews"])
 
@@ -71,80 +72,86 @@ def get_review(
 @router.post("/submit", response_model=ContentReviewOut)
 async def submit_content_text(
     payload: ReviewSubmission,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    submit_limiter.check(request)
+
     # Run the verification pipeline
     pipeline = ReviewPipeline(db, current_user.organization_id)
     pipeline_res = await pipeline.execute(payload.content)
 
     ai_notice = pipeline_res.get("ai_notice") if pipeline_res.get("ai_unavailable") else None
 
-    review = ContentReview(
-        organization_id=current_user.organization_id,
-        title=payload.title,
-        original_content=payload.content,
-        current_content=payload.content,
-        source_filename=payload.file_name or "direct_input.txt",
-        source_file_type=payload.file_type or "text",
-        status="in_review" if pipeline_res["total_issues"] > 0 else "draft",
-        author_id=current_user.id,
-        overall_score=pipeline_res["overall_score"],
-        has_critical_violations=pipeline_res["has_critical_violations"],
-        requires_human_attention=pipeline_res["requires_human_attention"],
-        review_notes=ai_notice,
-    )
-    db.add(review)
-    db.commit()
-    db.refresh(review)
-
-    # Initial Document Revision
-    rev = DocumentRevision(
-        review_id=review.id,
-        revision_number=1,
-        content=payload.content,
-        diff_summary="Initial submission",
-        change_type="submission",
-        created_by_id=current_user.id
-    )
-    db.add(rev)
-
-    # Add verified findings
-    for f in pipeline_res["findings"]:
-        finding = ReviewFinding(
-            review_id=review.id,
-            clause_id=f.get("clause_id"),
-            fact_id=f.get("fact_id"),
-            clause_number=f.get("clause_number"),
-            fact_code=f.get("fact_code"),
-            title=f["title"],
-            original_text=f["original_text"],
-            severity=f["severity"],
-            explanation=f["explanation"],
-            suggested_correction=f.get("suggested_correction"),
-            confidence=f["confidence"],
-            verification_status=f["verification_status"],
-            evidence_source=f.get("evidence_source"),
-            decision_status="pending"
+    try:
+        review = ContentReview(
+            organization_id=current_user.organization_id,
+            title=payload.title,
+            original_content=payload.content,
+            current_content=payload.content,
+            source_filename=payload.file_name or "direct_input.txt",
+            source_file_type=payload.file_type or "text",
+            status="in_review" if pipeline_res["total_issues"] > 0 else "draft",
+            author_id=current_user.id,
+            overall_score=pipeline_res["overall_score"],
+            has_critical_violations=pipeline_res["has_critical_violations"],
+            requires_human_attention=pipeline_res["requires_human_attention"],
+            review_notes=ai_notice,
         )
-        db.add(finding)
+        db.add(review)
+        db.flush()
 
-    # Log to audit trail
-    audit = AuditLog(
-        organization_id=current_user.organization_id,
-        user_id=current_user.id,
-        action="SUBMIT_CONTENT_REVIEW",
-        target_type="ContentReview",
-        target_id=review.id,
-        details={
-            "title": review.title,
-            "overall_score": review.overall_score,
-            "issues_count": pipeline_res["total_issues"]
-        }
-    )
-    db.add(audit)
-    db.commit()
-    db.refresh(review)
+        # Initial Document Revision
+        rev = DocumentRevision(
+            review_id=review.id,
+            revision_number=1,
+            content=payload.content,
+            diff_summary="Initial submission",
+            change_type="submission",
+            created_by_id=current_user.id
+        )
+        db.add(rev)
+
+        # Add verified findings
+        for f in pipeline_res["findings"]:
+            finding = ReviewFinding(
+                review_id=review.id,
+                clause_id=f.get("clause_id"),
+                fact_id=f.get("fact_id"),
+                clause_number=f.get("clause_number"),
+                fact_code=f.get("fact_code"),
+                title=f["title"],
+                original_text=f["original_text"],
+                severity=f["severity"],
+                explanation=f["explanation"],
+                suggested_correction=f.get("suggested_correction"),
+                confidence=f["confidence"],
+                verification_status=f["verification_status"],
+                evidence_source=f.get("evidence_source"),
+                decision_status="pending"
+            )
+            db.add(finding)
+
+        # Log to audit trail
+        audit = AuditLog(
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            action="SUBMIT_CONTENT_REVIEW",
+            target_type="ContentReview",
+            target_id=review.id,
+            details={
+                "title": review.title,
+                "overall_score": review.overall_score,
+                "issues_count": pipeline_res["total_issues"]
+            }
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(review)
+    except Exception:
+        db.rollback()
+        raise
 
     review.author_name = current_user.full_name
     review.reviewer_name = "Unassigned"
@@ -152,13 +159,18 @@ async def submit_content_text(
 
 @router.post("/upload", response_model=ContentReviewOut)
 async def upload_content_file(
+    request: Request,
     title: str = Form(...),
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    contents = await file.read()
-    extracted_text, file_type = DocumentParser.extract_text_from_bytes(contents, file.filename)
+    submit_limiter.check(request)
+    try:
+        contents = await file.read()
+        extracted_text, file_type = DocumentParser.extract_text_from_bytes(contents, file.filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     submission = ReviewSubmission(
         title=title,
@@ -166,7 +178,7 @@ async def upload_content_file(
         file_name=file.filename,
         file_type=file_type
     )
-    return await submit_content_text(submission, current_user, db)
+    return await submit_content_text(submission, request, current_user, db)
 
 @router.post("/{review_id}/findings/{finding_id}/action", response_model=ContentReviewOut)
 async def handle_finding_action(
@@ -191,6 +203,10 @@ async def handle_finding_action(
         raise HTTPException(status_code=404, detail="Finding not found")
 
     action = action_data.action.lower()
+    # Idempotency guard: if finding already in requested decision state, return without duplicating revisions
+    if finding.decision_status == action:
+        return get_review(review.id, current_user, db)
+
     replacement_text = None
 
     if action == "accept":
@@ -365,6 +381,27 @@ def decide_review(
     if current_user.role == "Creator":
         raise HTTPException(status_code=403, detail="Creators cannot make final approval decisions.")
 
+    # Status guard: Finalized reviews cannot be transitioned to incompatible states
+    if review.status == "approved" and decision_val != "approved":
+        raise HTTPException(
+            status_code=400,
+            detail="Review has already been finalized as approved and cannot be changed."
+        )
+    if review.status == "rejected" and decision_val != "rejected":
+        raise HTTPException(
+            status_code=400,
+            detail="Review has already been finalized as rejected and cannot be approved."
+        )
+    if review.status == "changes_requested" and decision_val == "approved":
+        raise HTTPException(
+            status_code=400,
+            detail="Content has pending changes requested. Updates must be applied before final approval."
+        )
+
+    # Idempotency guard: Return current state if review is already in the requested decision status
+    if review.status == decision_val:
+        return get_review(review.id, current_user, db)
+
     if decision_val == "approved":
         # Check if there are unresolved critical violations
         if review.has_critical_violations:
@@ -388,7 +425,6 @@ def decide_review(
         decision=review.status,
         notes=payload.notes
     )
-    db.add(decision_record)
 
     audit = AuditLog(
         organization_id=current_user.organization_id,
@@ -398,8 +434,14 @@ def decide_review(
         target_id=review.id,
         details={"decision": review.status, "notes": payload.notes}
     )
-    db.add(audit)
-    db.commit()
+
+    try:
+        db.add(decision_record)
+        db.add(audit)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return get_review(review.id, current_user, db)
 
