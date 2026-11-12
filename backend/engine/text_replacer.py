@@ -46,3 +46,4 @@ def apply_clean_replacement(content: str, original_text: str, replacement: str) 
         text = text[0].upper() + text[1:]
 
     return text.strip()
+

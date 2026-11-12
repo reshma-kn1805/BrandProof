@@ -84,3 +84,4 @@ def pre_check_suggestions(
             f["explanation"] = f"{f.get('explanation', '')}\n\n[Pre-Check Guard]: Needs a human look. Automated rewrite withheld because the suggested text {withhold_reason}"
 
     return findings
+

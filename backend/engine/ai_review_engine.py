@@ -1,8 +1,10 @@
 import os
 import json
+import time
 import logging
 import httpx
 from typing import List, Dict, Any, Optional
+from backend.redaction.redactor import redact_content, restore_content, RedactionResult
 
 logger = logging.getLogger("brandproof.ai_review")
 
@@ -23,27 +25,91 @@ class AIReviewEngine:
     def is_ai_available(self) -> bool:
         return bool(self.gemini_api_key or self.openai_api_key)
 
-    async def analyze(self, content: str) -> Dict[str, Any]:
+    async def analyze(
+        self,
+        content: str,
+        confidential_mode: bool = False,
+        confidential_terms: Optional[List[str]] = None,
+        review_id: Optional[int] = None,
+        organization_id: Optional[int] = None,
+        db: Optional[Any] = None
+    ) -> Dict[str, Any]:
         """
         Runs AI contextual review. Returns structured JSON containing contextual findings.
+        If confidential_mode is enabled, redacts PII/confidential terms before calling
+        the provider and restores the original text in the output.
         """
+        redaction_res: Optional[RedactionResult] = None
+        text_to_send = content
+        if confidential_mode:
+            redaction_res = redact_content(content, confidential_terms=confidential_terms)
+            text_to_send = redaction_res.redacted_text
+
         if not self.is_ai_available():
             return {
                 "ai_active": False,
                 "ai_unavailable": False,
                 "provider": "offline-rules",
                 "notice": "External LLM API key not configured. Using deterministic compliance engine.",
-                "findings": []
+                "findings": [],
+                "redaction_summary": redaction_res.counts if redaction_res else None
             }
 
-        prompt = self._construct_prompt(content)
+        prompt = self._construct_prompt(text_to_send)
+        start_time = time.time()
+        provider_name = "gemini" if self.gemini_api_key else "openai"
+        model_name = self.gemini_model if self.gemini_api_key else self.openai_model
+        call_status = "success"
 
-        if self.gemini_api_key:
-            return await self._call_gemini(prompt)
-        elif self.openai_api_key:
-            return await self._call_openai(prompt)
+        try:
+            if self.gemini_api_key:
+                res = await self._call_gemini(prompt)
+            else:
+                res = await self._call_openai(prompt)
+        except Exception as e:
+            call_status = "error"
+            logger.error(f"AI call exception: {e}")
+            res = {
+                "ai_active": False,
+                "ai_unavailable": True,
+                "provider": f"{provider_name}-fallback",
+                "notice": f"AI provider error: {str(e)}",
+                "findings": []
+            }
         
-        return {"ai_active": False, "ai_unavailable": False, "findings": []}
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        # Log AI Call in DB (never raw text!)
+        if db and organization_id:
+            try:
+                from backend.models import AICallLog
+                log_entry = AICallLog(
+                    organization_id=organization_id,
+                    review_id=review_id,
+                    provider=provider_name,
+                    model=model_name,
+                    redaction_enabled=confidential_mode,
+                    redaction_counts=redaction_res.counts if redaction_res else None,
+                    latency_ms=latency_ms,
+                    status=call_status
+                )
+                db.add(log_entry)
+                db.flush()
+            except Exception as log_err:
+                logger.warning(f"Failed to record AICallLog: {log_err}")
+
+        # Restore tokens in findings if redaction was applied
+        if redaction_res and redaction_res.token_map:
+            for f in res.get("findings", []):
+                if "original_text" in f:
+                    f["original_text"] = restore_content(f["original_text"], redaction_res.token_map)
+                if "suggested_correction" in f and f["suggested_correction"]:
+                    f["suggested_correction"] = restore_content(f["suggested_correction"], redaction_res.token_map)
+                if "explanation" in f and f["explanation"]:
+                    f["explanation"] = restore_content(f["explanation"], redaction_res.token_map)
+
+        res["redaction_summary"] = redaction_res.counts if redaction_res else None
+        return res
 
     def _construct_prompt(self, content: str) -> str:
         clauses_summary = "\n".join([

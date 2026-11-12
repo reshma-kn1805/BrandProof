@@ -23,7 +23,13 @@ class ReviewPipeline:
         self.retriever = EvidenceRetriever(db, organization_id)
         self.verifier = IndependentVerificationLayer(db, organization_id)
 
-    async def execute(self, content: str) -> Dict[str, Any]:
+    async def execute(
+        self,
+        content: str,
+        confidential_mode: bool = False,
+        confidential_terms: Optional[List[str]] = None,
+        review_id: Optional[int] = None
+    ) -> Dict[str, Any]:
         # Stage 3: Retrieve tenant evidence context
         evidence_ctx = self.retriever.get_all_evidence_context()
 
@@ -36,7 +42,14 @@ class ReviewPipeline:
 
         # Stage 4: AI-Assisted Review (Contextual tone, intent, guarantees)
         ai_engine = AIReviewEngine(evidence_ctx)
-        ai_res = await ai_engine.analyze(content)
+        ai_res = await ai_engine.analyze(
+            content=content,
+            confidential_mode=confidential_mode,
+            confidential_terms=confidential_terms,
+            review_id=review_id,
+            organization_id=self.organization_id,
+            db=self.db
+        )
         ai_findings = ai_res.get("findings", [])
         for af in ai_findings:
             af["engine_source"] = "ai"
@@ -85,6 +98,7 @@ class ReviewPipeline:
             "ai_unavailable": ai_res.get("ai_unavailable", False),
             "ai_provider": ai_res.get("provider", "deterministic-fallback"),
             "ai_notice": ai_res.get("notice"),
+            "redaction_summary": ai_res.get("redaction_summary"),
             "total_issues": len(verified_findings),
         }
 
