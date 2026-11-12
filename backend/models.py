@@ -13,6 +13,8 @@ class Organization(Base):
     slug = Column(String(100), nullable=False, unique=True, index=True)
     description = Column(Text, nullable=True)
     is_fictional_demo = Column(Boolean, default=False)
+    confidential_mode_default = Column(Boolean, default=False)
+    confidential_terms = Column(JSON, default=list)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     users = relationship("User", back_populates="organization")
@@ -158,6 +160,9 @@ class ContentReview(Base):
     requires_human_attention = Column(Boolean, default=False)
     review_notes = Column(Text, nullable=True)
     rejection_reason = Column(Text, nullable=True)
+    confidential_mode = Column(Boolean, default=False)
+    redaction_summary = Column(JSON, nullable=True)
+    report_fingerprint = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -260,8 +265,28 @@ class AuditLog(Base):
     target_id = Column(Integer, nullable=True)
     details = Column(JSON, nullable=True)
     ip_address = Column(String(50), default="127.0.0.1")
+    prev_hash = Column(String(64), nullable=True)
+    entry_hash = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
 
     organization = relationship("Organization", back_populates="audit_logs")
     user = relationship("User")
+
+
+class AICallLog(Base):
+    __tablename__ = "ai_calls"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    review_id = Column(Integer, ForeignKey("content_reviews.id"), nullable=True, index=True)
+    provider = Column(String(50), nullable=False)
+    model = Column(String(100), nullable=False)
+    redaction_enabled = Column(Boolean, default=False)
+    redaction_counts = Column(JSON, nullable=True)
+    latency_ms = Column(Integer, default=0)
+    status = Column(String(50), default="success")  # success, fallback, error
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+    organization = relationship("Organization")
+    review = relationship("ContentReview")
 

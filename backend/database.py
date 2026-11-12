@@ -61,7 +61,47 @@ def migrate_columns(target_engine=None):
                 for col_name, col_type in new_rc_cols:
                     if col_name not in rc_cols:
                         conn.execute(text(f"ALTER TABLE review_comments ADD COLUMN {col_name} {col_type}"))
+
+            if "organizations" in table_names:
+                org_cols = {col["name"] for col in inspector.get_columns("organizations")}
+                new_org_cols = [
+                    ("confidential_mode_default", "BOOLEAN DEFAULT 0"),
+                    ("confidential_terms", "TEXT DEFAULT '[]'"),
+                ]
+                for col_name, col_type in new_org_cols:
+                    if col_name not in org_cols:
+                        conn.execute(text(f"ALTER TABLE organizations ADD COLUMN {col_name} {col_type}"))
+
+            if "content_reviews" in table_names:
+                cr_cols = {col["name"] for col in inspector.get_columns("content_reviews")}
+                new_cr_cols = [
+                    ("confidential_mode", "BOOLEAN DEFAULT 0"),
+                    ("redaction_summary", "TEXT"),
+                    ("report_fingerprint", "VARCHAR(64)"),
+                ]
+                for col_name, col_type in new_cr_cols:
+                    if col_name not in cr_cols:
+                        conn.execute(text(f"ALTER TABLE content_reviews ADD COLUMN {col_name} {col_type}"))
+
+            if "audit_logs" in table_names:
+                al_cols = {col["name"] for col in inspector.get_columns("audit_logs")}
+                new_al_cols = [
+                    ("prev_hash", "VARCHAR(64)"),
+                    ("entry_hash", "VARCHAR(64)"),
+                ]
+                for col_name, col_type in new_al_cols:
+                    if col_name not in al_cols:
+                        conn.execute(text(f"ALTER TABLE audit_logs ADD COLUMN {col_name} {col_type}"))
             conn.commit()
+
+        # Backfill existing audit logs with sha256 chain
+        try:
+            from backend.audit_chain import backfill_audit_chain
+            from sqlalchemy.orm import Session
+            with Session(engine) as session:
+                backfill_audit_chain(session)
+        except Exception as e:
+            print(f"[Migration] Audit backfill notice: {e}")
     except Exception as e:
         print(f"[Migration] Notice: {e}")
 

@@ -465,6 +465,13 @@ def seed_database(db: Session = None):
             db.add(clean_review)
             db.commit()
 
+        # Ensure audit chain is initialized and hashed
+        try:
+            from backend.audit_chain import backfill_audit_chain
+            backfill_audit_chain(db)
+        except Exception as be:
+            print(f"[Seed] Audit chain backfill note: {be}")
+
         print("[Seed] BrandProof database seeded successfully with Nila Foods workspace.")
     finally:
         if close_db:
