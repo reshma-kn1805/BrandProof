@@ -11,14 +11,14 @@ All backend unit, security, rule engine, and integration tests are self-containe
 
 **Command**:
 ```bash
-python -m pytest tests -q --ignore=tests/test_playwright_e2e.py
+python -m pytest tests -q --ignore=tests/test_playwright_e2e.py --ignore=tests/test_playwright_judge_journey.py
 ```
 
 **Real Result**:
 ```text
-59 passed, 39 warnings in 38.41s
+60 passed, 39 warnings
 ```
-*(Total collected: 60 tests including 1 Playwright end-to-end browser test).*
+*(Total collected across repository: 62 tests including 2 Playwright browser test files).*
 
 ---
 
@@ -30,10 +30,11 @@ python -m pytest tests -q --ignore=tests/test_playwright_e2e.py
 | `tests/test_golden_suggestions.py` | 25 | **24-Permutation Golden Test**: Validates that accepting all 4 findings on the Nila Foods sample in **any of the 24 possible orders** ($4! = 24$) produces 100% compliant, grammatically clean text without duplicate tokens. |
 | `tests/test_phase3_guards.py` | 12 | Input validation (whitespace, >50k char limit), upload sniffing (empty file, >5MB limit, corrupt docx/pdf, invalid extension), idempotency (double accept/reject), status transition guards, and login rate limiting. |
 | `tests/test_phase4_features.py` | 5 | Suggestion pre-checking (suppresses unbacked claims), mandatory rejection reason storage, custom edit re-verification, threaded finding comments ("Ask Manager"), and AI hallucination filter. |
-| `tests/test_phase5_features.py` | 4 | **Improvement 3**: PII regex redaction & token round-trip, SHA-256 tamper-evident audit hash chain integrity & corruption detection, ReportLab PDF generation with SHA-256 fingerprint, and confidential draft workflow. |
-| `tests/test_phase6_features.py` | 3 | **Improvement 1**: Guideline health telemetry, override rate calculation ($(\text{rejects} + \text{edits}) / \text{total}$), contradictory clause conflict detection, and policy backtesting engine. |
-| `tests/test_phase7_images.py` | 4 | **Improvement 2**: Missing alt-text detection, WCAG 2.1 AA luminance contrast calculations ($\ge 4.5:1$), approved palette distance ($\Delta E \le 12.0$), and compliant asset zero-finding verification. |
+| `tests/test_phase5_features.py` | 5 | **Improvement 3**: PII regex redaction & token round-trip, SHA-256 tamper-evident audit hash chain integrity, multi-organization tenant isolation, broken prev_hash detection, ReportLab PDF generation with SHA-256 fingerprint, and confidential draft workflow. |
+| `tests/test_phase6_features.py` | 3 | **Improvement 1**: Guideline health telemetry, override rate calculation ($(\text{rejects} + \text{edits}) / \text{total} \ge 50\%$), heuristic overlapping-span conflict detection ($\ge 3$ reviews), and policy backtesting engine. |
+| `tests/test_phase7_images.py` | 4 | **Improvement 2**: Missing alt-text detection, WCAG 2.1 AA luminance contrast calculations ($\ge 4.5:1$), approved palette distance boundary tests ($\Delta E \le 12.0$), and compliant asset zero-finding verification. |
 | `tests/test_playwright_e2e.py` | 1 | End-to-end browser journey: double-click submission prevention and refresh persistence. |
+| `tests/test_playwright_judge_journey.py` | 1 | End-to-end browser journey: 3-minute first-run checklist, role switcher, tooltips, and tablet viewport layout. |
 
 ---
 

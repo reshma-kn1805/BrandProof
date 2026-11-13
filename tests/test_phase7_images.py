@@ -85,6 +85,16 @@ def test_wcag_contrast_and_palette_math():
     lab_green = rgb_to_lab(46, 125, 79)
     assert delta_e_cie76(lab_magenta, lab_green) > 50.0  # Distinct off-palette distance
 
+    # Palette threshold boundary tests (threshold = 12.0)
+    # Approved Nila Green is (46, 125, 79)
+    # Near-green (48, 123, 81) has delta_e ~ 2.0 <= 12.0 (on-palette)
+    lab_near_green = rgb_to_lab(48, 123, 81)
+    assert delta_e_cie76(lab_green, lab_near_green) <= 12.0
+
+    # Off-palette olive (80, 110, 40) has delta_e > 12.0
+    lab_olive = rgb_to_lab(80, 110, 40)
+    assert delta_e_cie76(lab_green, lab_olive) > 12.0
+
 
 # 3. Done when scenario:
 # "submitting an image with no alt text, low contrast, and an unapproved magenta background

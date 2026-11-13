@@ -681,10 +681,15 @@ def _do_verify_report(search_q: Optional[str], db: Session) -> ReportVerifyOut:
     review = None
     if q.isdigit():
         review = db.query(ContentReview).filter(ContentReview.id == int(q)).first()
+        if review and not review.report_fingerprint:
+            return ReportVerifyOut(
+                matched=False,
+                message="Review exists, but no official cryptographic audit report has been generated for it yet."
+            )
     else:
         review = db.query(ContentReview).filter(ContentReview.report_fingerprint == q).first()
 
-    if not review:
+    if not review or not review.report_fingerprint:
         return ReportVerifyOut(
             matched=False,
             message="No audit report matches this identifier or cryptographic fingerprint."

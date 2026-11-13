@@ -2,7 +2,7 @@
 
 BrandProof exposes a complete RESTful API built with **FastAPI**. All endpoints are versioned under `/api/` and output standard JSON responses. In addition to programmatic JSON schemas, the interactive OpenAPI specification is exportable and viewable at `/docs` (Swagger UI) or `/redoc`.
 
-The complete machine-readable OpenAPI schema is persisted at [docs/openapi.json](file:///c:/Users/reshm/OneDrive/Desktop/BrandProof/docs/openapi.json).
+The complete machine-readable OpenAPI schema is persisted at [docs/openapi.json](openapi.json).
 
 ---
 

@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from backend.engine.evidence_retriever import EvidenceRetriever
 from backend.engine.deterministic_engine import DeterministicEngine

@@ -36,7 +36,7 @@ def static_server():
 def test_playwright_double_click_and_refresh(static_server):
     with sync_playwright() as p:
         chrome_exe = r"C:\Users\reshm\AppData\Local\ms-playwright\chromium-1248\chrome-win64\chrome.exe"
-        launch_kwargs = {"args": ["--headless=new"]}
+        launch_kwargs = {"args": ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage"]}
         if os.path.exists(chrome_exe):
             launch_kwargs["executable_path"] = chrome_exe
         browser = p.chromium.launch(**launch_kwargs)
@@ -50,7 +50,7 @@ def test_playwright_double_click_and_refresh(static_server):
 
         # Step 1: In static mode with no backend running, wait for waking screen and skip to demo mode
         print("[Playwright E2E] Checking server waking / demo mode handling...")
-        skip_btn = page.locator("button:has-text('Skip waiting')")
+        skip_btn = page.locator("button:has-text('Demo Mode'), button:has-text('Skip waiting')").first
         skip_btn.wait_for(state="visible", timeout=12000)
         skip_btn.click()
         page.wait_for_timeout(1000)

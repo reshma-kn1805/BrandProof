@@ -42,7 +42,7 @@ def test_judge_journey_smoke_test(static_server):
     """
     with sync_playwright() as p:
         chrome_exe = r"C:\Users\reshm\AppData\Local\ms-playwright\chromium-1248\chrome-win64\chrome.exe"
-        launch_kwargs = {"args": ["--headless=new"]}
+        launch_kwargs = {"args": ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage"]}
         if os.path.exists(chrome_exe):
             launch_kwargs["executable_path"] = chrome_exe
         browser = p.chromium.launch(**launch_kwargs)

@@ -259,8 +259,8 @@ def analyze_image_accessibility(
         })
 
     # --- 3. Approved Brand Palette Check (Clause 5.4) ---
-    # Tolerance threshold: delta_e > 25 indicates distinct off-palette color
-    PALETTE_DELTA_E_THRESHOLD = 25.0
+    # Tolerance threshold: delta_e > 12.0 indicates off-palette color (CIE76 distance from approved brand palette)
+    PALETTE_DELTA_E_THRESHOLD = 12.0
     off_palette_colors = []
 
     for c in dominant_colors:

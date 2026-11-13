@@ -94,9 +94,9 @@ $$\text{entry\_hash} = \text{SHA-256}\Big(\text{canonical\_json}(\text{timestamp
 1. **Telemetry Ingestion**: Every user finding decision (`accept`, `edit`, `reject`) records the associated clause and rationale.
 2. **Override Calculation**:
    $$\text{Override Rate} = \frac{\text{Rejections} + \text{Custom Edits}}{\text{Total Findings on Clause}}$$
-3. **Threshold Alerts**: Clauses exceeding a 40% override rate are flagged as outdated or ambiguous.
-4. **Conflict Detection**: Heuristic keyword matrix detects contradictory directives between clauses (e.g., "always use full legal name" vs. "keep social headlines under 5 words").
-5. **Backtesting Simulator**: Allows compliance administrators to test revised rule definitions against historical reviews to verify false-positive reductions before pushing policies live.
+3. **Unclear Clause Detection**: Clauses with $\ge 6$ recorded human decisions and an override rate $\ge 50\%$ are automatically classified as "Possibly unclear", signaling ambiguity or need for policy revision.
+4. **Conflict Detection**: Heuristic rule-based detection identifying pairs of different clauses that flag recurring overlapping text spans across $\ge 3$ distinct reviews (no claims of semantic AI reasoning).
+5. **Backtesting Simulator**: Replays deterministic rules against historical review content to project changes in false-positive triggers and impact before committing a revision $N+1$. Seeded benchmark reviews carry `is_demo_history=true` and can be toggled off.
 
 ---
 

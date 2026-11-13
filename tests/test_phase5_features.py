@@ -249,3 +249,58 @@ def test_done_when_confidential_draft_e2e():
     audit_verify = client.get("/api/audit/verify", headers=auth_headers)
     assert audit_verify.status_code == 200
     assert audit_verify.json()["valid"] is True
+
+
+# 5. Multi-organization audit verification, broken prev_hash, and fingerprint tests
+def test_multi_org_audit_chain_and_broken_prev_hash():
+    from backend.database import SessionLocal
+    db = SessionLocal()
+    try:
+        org1 = db.query(Organization).first()
+        assert org1 is not None
+
+        # Create or fetch Org 2
+        org2 = db.query(Organization).filter(Organization.slug == "test-tenant-2").first()
+        if not org2:
+            org2 = Organization(name="Second Brand Co", slug="test-tenant-2")
+            db.add(org2)
+            db.commit()
+
+        # Interleaved audit entries across both organizations
+        log1_org1 = record_audit_log(db, org1.id, "ORG1_ACTION_A", "Review", 101)
+        log1_org2 = record_audit_log(db, org2.id, "ORG2_ACTION_A", "Review", 201)
+        log2_org1 = record_audit_log(db, org1.id, "ORG1_ACTION_B", "Review", 102)
+        log2_org2 = record_audit_log(db, org2.id, "ORG2_ACTION_B", "Review", 202)
+        db.commit()
+
+        # Both organizations verify independently as valid
+        v_org1 = verify_audit_chain(db, organization_id=org1.id)
+        v_org2 = verify_audit_chain(db, organization_id=org2.id)
+        assert v_org1["valid"] is True
+        assert v_org2["valid"] is True
+
+        # Test broken prev_hash detection on Org 1
+        real_prev = log2_org1.prev_hash
+        log2_org1.prev_hash = "0000000000000000000000000000000000000000000000000000000000000000"
+        db.commit()
+
+        v_org1_broken = verify_audit_chain(db, organization_id=org1.id)
+        assert v_org1_broken["valid"] is False
+        assert v_org1_broken["first_broken_entry"] == log2_org1.id
+
+        # Org 2 remains completely valid despite Org 1 tamper!
+        v_org2_still_valid = verify_audit_chain(db, organization_id=org2.id)
+        assert v_org2_still_valid["valid"] is True
+
+        # Restore Org 1
+        log2_org1.prev_hash = real_prev
+        db.commit()
+        assert verify_audit_chain(db, organization_id=org1.id)["valid"] is True
+
+        # Test PDF fingerprint verification rejection on fake input
+        fake_verify = client.post("/api/reports/verify", json={"query": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"})
+        assert fake_verify.status_code == 200
+        assert fake_verify.json()["matched"] is False
+
+    finally:
+        db.close()

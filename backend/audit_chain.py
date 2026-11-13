@@ -35,8 +35,10 @@ def record_audit_log(
     user_id: Optional[int] = None,
     ip_address: str = "127.0.0.1"
 ) -> AuditLog:
-    # Must append inside transaction so the chain cannot fork
-    last_entry = db.query(AuditLog).order_by(AuditLog.id.desc()).first()
+    # Must append inside transaction per organization so the chain cannot fork
+    last_entry = db.query(AuditLog).filter(
+        AuditLog.organization_id == organization_id
+    ).order_by(AuditLog.id.desc()).first()
     prev_hash = last_entry.entry_hash if last_entry else None
 
     log_entry = AuditLog(
@@ -64,58 +66,75 @@ def backfill_audit_chain(db: Session) -> int:
     if unhashed_count == 0:
         return 0
 
-    all_logs = db.query(AuditLog).order_by(AuditLog.id.asc()).all()
-    prev_hash = None
+    # Backfill per organization so each tenant maintains an isolated cryptographic hash chain
+    org_ids = [r[0] for r in db.query(AuditLog.organization_id).distinct().all()]
     updated = 0
-    for log in all_logs:
-        expected_entry_data = canonical_entry_dict(log)
-        computed_hash = compute_entry_hash(expected_entry_data, prev_hash)
-        if log.prev_hash != prev_hash or log.entry_hash != computed_hash:
-            log.prev_hash = prev_hash
-            log.entry_hash = computed_hash
-            updated += 1
-        prev_hash = log.entry_hash
+    for org_id in org_ids:
+        org_logs = db.query(AuditLog).filter(AuditLog.organization_id == org_id).order_by(AuditLog.id.asc()).all()
+        prev_hash = None
+        for log in org_logs:
+            expected_entry_data = canonical_entry_dict(log)
+            computed_hash = compute_entry_hash(expected_entry_data, prev_hash)
+            if log.prev_hash != prev_hash or log.entry_hash != computed_hash:
+                log.prev_hash = prev_hash
+                log.entry_hash = computed_hash
+                updated += 1
+            prev_hash = log.entry_hash
     db.commit()
     return updated
 
 def verify_audit_chain(db: Session, organization_id: Optional[int] = None) -> Dict[str, Any]:
-    query = db.query(AuditLog).order_by(AuditLog.id.asc())
-    if organization_id:
-        query = query.filter(AuditLog.organization_id == organization_id)
-    
-    logs = query.all()
-    if not logs:
+    if organization_id is not None:
+        logs = db.query(AuditLog).filter(AuditLog.organization_id == organization_id).order_by(AuditLog.id.asc()).all()
+        if not logs:
+            return {
+                "valid": True,
+                "entries": 0,
+                "head": None,
+                "first_broken_entry": None
+            }
+
+        prev_hash = None
+        for log in logs:
+            if log.prev_hash != prev_hash:
+                return {
+                    "valid": False,
+                    "entries": len(logs),
+                    "head": prev_hash,
+                    "first_broken_entry": log.id
+                }
+            
+            entry_data = canonical_entry_dict(log)
+            expected_hash = compute_entry_hash(entry_data, prev_hash)
+            if log.entry_hash != expected_hash:
+                return {
+                    "valid": False,
+                    "entries": len(logs),
+                    "head": prev_hash,
+                    "first_broken_entry": log.id
+                }
+            prev_hash = log.entry_hash
+
         return {
             "valid": True,
-            "entries": 0,
-            "head": None,
+            "entries": len(logs),
+            "head": prev_hash,
             "first_broken_entry": None
         }
-
-    prev_hash = None
-    for log in logs:
-        if log.prev_hash != prev_hash:
-            return {
-                "valid": False,
-                "entries": len(logs),
-                "head": prev_hash,
-                "first_broken_entry": log.id
-            }
-        
-        entry_data = canonical_entry_dict(log)
-        expected_hash = compute_entry_hash(entry_data, prev_hash)
-        if log.entry_hash != expected_hash:
-            return {
-                "valid": False,
-                "entries": len(logs),
-                "head": prev_hash,
-                "first_broken_entry": log.id
-            }
-        prev_hash = log.entry_hash
-
-    return {
-        "valid": True,
-        "entries": len(logs),
-        "head": prev_hash,
-        "first_broken_entry": None
-    }
+    else:
+        # Verify across all organizations
+        org_ids = [r[0] for r in db.query(AuditLog.organization_id).distinct().all()]
+        total_entries = 0
+        last_head = None
+        for org_id in org_ids:
+            res = verify_audit_chain(db, organization_id=org_id)
+            if not res["valid"]:
+                return res
+            total_entries += res["entries"]
+            last_head = res["head"]
+        return {
+            "valid": True,
+            "entries": total_entries,
+            "head": last_head,
+            "first_broken_entry": None
+        }

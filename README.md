@@ -10,10 +10,11 @@ BrandProof is an enterprise-grade brand governance and content compliance verifi
 
 - **Live URL**: [https://reshma-kn1805.github.io/BrandProof/](https://reshma-kn1805.github.io/BrandProof/)
 - **Source Code**: [https://github.com/reshma-kn1805/BrandProof](https://github.com/reshma-kn1805/BrandProof)
-- **API Documentation**: [docs/API.md](file:///c:/Users/reshm/OneDrive/Desktop/BrandProof/docs/API.md) | [docs/openapi.json](file:///c:/Users/reshm/OneDrive/Desktop/BrandProof/docs/openapi.json)
+- **API Documentation**: [docs/API.md](docs/API.md) | [docs/openapi.json](docs/openapi.json)
 
 > [!NOTE]
-> **Live Link Behavior**: When the backend server is reachable, the live web application connects to the real REST API and persists data to PostgreSQL/SQLite. If the backend is waking from cold sleep, the interface displays a *"Waking the server, one moment"* status and retries with backoff for up to 60 seconds. If the backend cannot be reached, the application gracefully degrades to a clearly labeled **Demo Mode** with sample data in the browser so judges can evaluate every view, workflow, and improvement without disruption.
+> **Live Link Behavior & Deployment Status**: When the backend server is reachable, the live web application connects to the real REST API and persists data to PostgreSQL/SQLite. If the backend is waking from cold sleep, the interface displays an instant 1-click **"⚡ Launch Instant Demo Mode (Zero Wait, Full Features)"** button alongside polling with backoff for up to 60 seconds.
+> **Deployment Status**: The GitHub Pages deployment workflow (`.github/workflows/deploy.yml`) generated the production artifact, but automated deployment requires a 1-time GitHub environment permission (allowing branch `main` in Settings -> Environments -> `github-pages`). Until this manual setting is saved, the latest live deployment remains **NOT VERIFIED**.
 
 ---
 
@@ -55,21 +56,22 @@ To experience the complete verification lifecycle in 3 minutes:
 ## 🌟 Key Features & Round 3 Improvements
 
 ### Improvement 1: Guideline Health, Telemetry & Policy Backtesting
-- **Override Telemetry**: Tracks every creator rejection and custom edit per clause. Clauses with override rates $>40\%$ are automatically flagged as ambiguous or outdated.
-- **Clause Conflict Detector**: Identifies contradictory rules across guidelines (e.g., formal naming rules vs. headline length restrictions).
-- **Policy Backtesting Simulator**: Evaluates proposed rule changes against historical reviews before pushing updates live.
+- **Override Telemetry**: Tracks every creator rejection and custom edit per clause. A clause is classified as "Possibly unclear" when it has $\ge 6$ decisions and an override rate $\ge 50\%$.
+- **Clause Conflict Detection**: Heuristic rule-based detection identifying pairs of different clauses that flag recurring overlapping text spans across $\ge 3$ distinct reviews (no claims of semantic AI reasoning).
+- **Policy Backtesting Simulator**: Replays deterministic rules against historical review content to evaluate proposed clause modifications before committing revision $N+1$.
+- **Seeded Historical Telemetry**: Historical demo data is clearly flagged (`is_demo_history=true`) with an interactive filter switch to cleanly separate benchmark data from genuine creator submissions.
 
 ### Improvement 2: Visual Asset Accessibility & Contrast Engine
-- **WCAG 2.1 AA Contrast**: Calculates relative luminance ratios ($\ge 4.5:1$) on uploaded graphic assets using Pillow color quantization.
-- **Palette Verification**: Measures CIE76 Euclidean color distance ($\Delta E \le 12.0$) against approved brand colors.
-- **Alt-Text Governance**: Enforces screen-reader accessibility on marketing visuals.
+- **WCAG 2.1 AA Contrast**: Calculates relative luminance ratios ($\ge 4.5:1$) on uploaded graphic assets using Pillow dominant color quantization (labeled as estimated).
+- **Palette Verification**: Measures CIE76 Euclidean color distance against approved brand colors using a strict threshold ($\Delta E \le 12.0$).
+- **Alt-Text Governance**: Rule-based validation enforcing screen-reader descriptions on marketing visuals (flags missing, <5 chars, raw filenames, or redundant prefixes).
 
 ### Improvement 3: Privacy-Preserving AI & Tamper-Evident Audit
-- **Zero-Trust PII Redaction**: Replaces emails, phone numbers, currencies, 8+ digit numbers, and confidential terms with tokens (`[REDACTED_*]`) before calling external AI providers. Original tokens are restored in the response.
-- **Cryptographic Audit Hash Chain**: Every audit row is mathematically linked via SHA-256:
+- **Zero-Trust PII Redaction**: Replaces emails, phone numbers, currencies, 8+ digit numbers, brackets, and custom terms with tokens (`[REDACTED_*]`) before calling external AI providers. Original tokens are restored in the response.
+- **Cryptographic Audit Hash Chain**: Every audit row is mathematically linked via SHA-256 with tenant isolation:
   $$\text{entry\_hash} = \text{SHA-256}(\text{canonical\_json}(\text{entry}) + \text{prev\_hash})$$
   Detects any unauthorized database modifications or retroactive row deletions.
-- **Verifiable PDF Certificates**: Generates tamper-evident compliance certificates verifiable on the public `/verify-report` portal.
+- **Verifiable PDF Certificates**: Generates tamper-evident compliance certificates verifiable on the public `/verify-report` portal, with client-side formatted export available in demo mode.
 
 ---
 
@@ -107,7 +109,7 @@ python -m venv .venv
 # source .venv/bin/activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
 # Start backend server (seeds Nila Foods workspace automatically)
 uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
@@ -144,42 +146,53 @@ Copy `.env.example` to `.env` to customize settings:
 
 ## 🧪 Running Tests
 
-All 59 backend tests are self-contained and run against an isolated in-memory test database:
+### Backend Unit & Integration Tests
+All 60 backend tests are self-contained and run against an isolated in-memory test database:
 
 ```bash
-# Run full backend test suite
-python -m pytest tests -q --ignore=tests/test_playwright_e2e.py
+python -m pytest tests -q --ignore=tests/test_playwright_e2e.py --ignore=tests/test_playwright_judge_journey.py
 ```
 
-Expected result:
-```text
-59 passed, 39 warnings in 38.41s
-```
+### Browser End-to-End Tests
+Two dedicated Playwright test files verify user journeys and regression guards:
+- `tests/test_playwright_e2e.py`: Double-click prevention and refresh persistence.
+- `tests/test_playwright_judge_journey.py`: 3-minute first-run checklist, role switcher, plain-language tooltips, and tablet viewport layout.
 
-Continuous integration runs automatically on every push via `.github/workflows/ci.yml`.
+Continuous integration runs both test suites automatically via [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ---
 
-## 🚀 Deployment Architecture
+## 🚀 Deployment Architecture & Manual Verification
 
-- **Backend**: Hosted on Render as a containerized web service with PostgreSQL on Neon. Includes a scheduled GitHub Action keep-warm ping (`.github/workflows/keep-warm.yml`).
-- **Frontend**: Exported as static HTML/CSS/JS (`NEXT_EXPORT=true`) and deployed to GitHub Pages via `.github/workflows/deploy.yml`.
-- See [docs/DEPLOYMENT.md](file:///c:/Users/reshm/OneDrive/Desktop/BrandProof/docs/DEPLOYMENT.md) for step-by-step instructions.
+- **Backend**: Hosted on Render as a containerized web service with PostgreSQL on Neon. Includes a scheduled keep-warm ping ([.github/workflows/keep-warm.yml](.github/workflows/keep-warm.yml)).
+- **Frontend**: Exported as static HTML/CSS/JS (`NEXT_EXPORT=true`) and deployed to GitHub Pages via [.github/workflows/deploy.yml](.github/workflows/deploy.yml).
+- See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for step-by-step instructions.
+
+### Manual Action Required for GitHub Pages Deployment
+If GitHub Pages fails deployment with *"Branch 'main' is not allowed to deploy to github-pages due to environment protection rules"*:
+1. Open the BrandProof repository on GitHub.
+2. Go to **Settings**.
+3. Open **Environments** in the sidebar.
+4. Select `github-pages`.
+5. Under **Deployment branches and tags**, select **Selected branches** or **No restriction** and allow the `main` branch.
+6. Save the environment setting.
+7. Rerun the failed deployment workflow at Actions -> Deploy BrandProof to GitHub Pages.
 
 ---
 
 ## ⚠️ Known Limitations & Trade-offs
 
-1. **Free-Tier Cold Starts**: Cloud services on free tiers sleep when idle. The frontend includes automatic polling and an instant offline demo fallback.
-2. **Local Browser Test Execution**: Playwright end-to-end browser tests run in CI rather than low-spec local development machines to avoid browser launch timeouts.
-3. **Complex Photographic Contrast**: Dominant color quantization is tuned for branded digital assets and text graphics; photographic scenes with intricate backgrounds require human review.
+1. **Free-Tier Cold Starts**: Cloud services on free tiers sleep when idle. The frontend provides a 1-click instant demo launcher and polling with backoff.
+2. **Local Browser Test Execution**: Local Playwright execution on Windows workstations can encounter headless Chrome process timeouts; tests execute in CI via `.github/workflows/ci.yml`.
+3. **Complex Photographic Contrast**: Dominant color quantization accurately assesses digital branding and typography; complex multi-layered photography benefits from human visual review.
+4. **Live Deployment Status**: GitHub Pages deployment from `main` is pending the 1-time manual environment branch rule authorization described above.
 
 ---
 
 ## 📚 Technical Documentation
 
-- **[System Architecture](file:///c:/Users/reshm/OneDrive/Desktop/BrandProof/docs/ARCHITECTURE.md)**: Diagrams, pipeline flow, and hardest problems solved.
-- **[REST API Reference](file:///c:/Users/reshm/OneDrive/Desktop/BrandProof/docs/API.md)**: Endpoint listings, request bodies, error codes, and OpenAPI schema.
-- **[Verification & Testing](file:///c:/Users/reshm/OneDrive/Desktop/BrandProof/docs/TESTING.md)**: Real test counts, golden permutation results, and resolved bugs.
-- **[Product Roadmap](file:///c:/Users/reshm/OneDrive/Desktop/BrandProof/docs/ROADMAP.md)**: Post-Round 3 capabilities, target audience, and effort estimations.
-- **[Round 3 Changelog](file:///c:/Users/reshm/OneDrive/Desktop/BrandProof/docs/ROUND3_CHANGELOG.md)**: Comprehensive record of commits since `round2-final`.
+- **[System Architecture](docs/ARCHITECTURE.md)**: Diagrams, pipeline flow, and hardest problems solved.
+- **[REST API Reference](docs/API.md)**: Endpoint listings, request bodies, error codes, and OpenAPI schema.
+- **[Verification & Testing](docs/TESTING.md)**: Real test counts, golden permutation results, and resolved bugs.
+- **[Product Roadmap](docs/ROADMAP.md)**: Post-Round 3 capabilities, target audience, and effort estimations.
+- **[Round 3 Changelog](docs/ROUND3_CHANGELOG.md)**: Comprehensive record of commits since `round2-final`.
