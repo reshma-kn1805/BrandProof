@@ -94,8 +94,8 @@ export default function Home() {
         }
       }
 
-      // Step 1: Probe backend with a 6-second timeout
-      const isOnline = await checkBackendHealth(6000);
+      // Step 1: Probe backend with a fast 2.5-second timeout
+      const isOnline = await checkBackendHealth(2500);
       if (isCancelled) return;
 
       if (isOnline) {
@@ -110,7 +110,7 @@ export default function Home() {
       setServerStatus("waking");
       const startTime = Date.now();
       const maxWaitMs = 60000;
-      let delayMs = 2000;
+      let delayMs = 1500;
 
       while (Date.now() - startTime < maxWaitMs) {
         if (isCancelled) return;
@@ -118,7 +118,7 @@ export default function Home() {
         await new Promise((r) => setTimeout(r, delayMs));
         if (isCancelled) return;
 
-        const retryOnline = await checkBackendHealth(5000);
+        const retryOnline = await checkBackendHealth(3000);
         if (isCancelled) return;
 
         if (retryOnline) {
@@ -246,7 +246,7 @@ export default function Home() {
           <div className="bg-[#F7FAFA] border border-[#DCE7E8] rounded-lg py-2.5 px-4 text-xs text-[#205E65] font-mono">
             Elapsed: {wakingElapsed}s (retrying up to 60s)
           </div>
-          <div>
+          <div className="space-y-2 pt-1">
             <button
               onClick={() => {
                 sessionStorage.setItem("brandproof_force_demo", "true");
@@ -255,10 +255,13 @@ export default function Home() {
                 setServerStatus("demo");
                 checkAuth();
               }}
-              className="text-xs text-[#328C91] hover:text-[#205E65] underline font-medium transition-colors"
+              className="w-full py-2.5 px-4 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-bold rounded-lg shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 focus-visible:ring-2 focus-visible:ring-[#328C91]"
             >
-              Skip waiting & use offline demo mode
+              <span>⚡ Launch Instant Demo Mode (Zero Wait, Full Features)</span>
             </button>
+            <p className="text-[11px] text-[#63777C]">
+              Pre-loaded with Nila Foods workspace, guidelines, facts, and full verification pipeline.
+            </p>
           </div>
         </div>
       </div>

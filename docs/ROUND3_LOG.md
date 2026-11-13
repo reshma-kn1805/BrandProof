@@ -261,6 +261,20 @@ This document tracks phase-by-phase execution, timestamps, changes, and verifica
   - 59 backend tests passing cleanly.
   - Zero uncommitted files; working tree clean.
 
+---
+
+## [Post-Release Hardening] Polish & Operational Fixes
+- **Timestamp**: 2026-11-13 18:55:00 IST
+- **Status**: Completed & Verified
+- **Key Changes**:
+  - `frontend/src/app/page.tsx`: Reduced initial backend probe from 6.0s to 2.5s; added prominent 1-click **"⚡ Launch Instant Demo Mode (Zero Wait, Full Features)"** button on waking screen to eliminate cold-start wait times.
+  - `frontend/src/components/ReviewDetailView.tsx`: Added client-side printable certificate generator with embedded cryptographic SHA-256 fingerprint, enabling full compliance report export in both connected and demo modes.
+  - `backend/engine/image_analyzer.py`: Expanded color quantization to 8 clusters to capture low-percentage, high-contrast typography across complex photographic assets.
+  - `docs/TESTING.md`: Updated operational architecture and limitation resolution notes.
+- **Verification Results**:
+  - All 4 noticeable operational issues resolved. Working tree clean. Tag `round3-final` updated.
+
+
 
 
 

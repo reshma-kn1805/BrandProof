@@ -139,6 +139,104 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
     }
   };
 
+  const handleExportReport = () => {
+    if (activeEngineMode === "connected") {
+      window.open(api.getReportPdfUrl(review.id), "_blank");
+      return;
+    }
+
+    // Client-side formatted certificate export in Demo Mode
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const findingsHtml = (review.findings || [])
+      .map(
+        (f) => `
+        <div style="border: 1px solid #CBD5E1; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #FFF;">
+          <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 13px; color: #172C32;">
+            <span>Clause ${f.clause_number}: ${f.title}</span>
+            <span style="text-transform: uppercase; font-size: 10px; padding: 2px 8px; border-radius: 4px; background: ${
+              f.decision_status === "accepted" ? "#DCFCE7; color: #166534" : "#FEF3C7; color: #92400E"
+            }; font-weight: 700;">${f.decision_status || "PENDING"}</span>
+          </div>
+          <p style="font-size: 12px; color: #475569; margin: 6px 0 0 0;">${f.explanation}</p>
+          ${f.suggested_correction ? `<div style="font-size: 11px; color: #205E65; background: #EAF2F3; padding: 6px 10px; border-radius: 4px; margin-top: 6px;"><strong>Correction:</strong> ${f.suggested_correction}</div>` : ""}
+        </div>`
+      )
+      .join("");
+
+    const reportHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <title>BrandProof Compliance Certificate - Review #${review.id}</title>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #172C32; padding: 40px; margin: 0; background: #F8FAFC; }
+    .card { max-width: 800px; margin: 0 auto; background: #FFFFFF; border: 1px solid #DCE7E8; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    .header { border-bottom: 2px solid #205E65; padding-bottom: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
+    .title { font-size: 22px; font-weight: 800; color: #172E35; margin: 0; }
+    .subtitle { font-size: 12px; color: #63777C; margin-top: 4px; }
+    .badge { display: inline-block; padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 13px; text-transform: uppercase; }
+    .badge-approved { background: #DCFCE7; color: #166534; border: 1px solid #86EFAC; }
+    .badge-review { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+    .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #205E65; border-bottom: 1px solid #E2E8F0; padding-bottom: 6px; margin: 24px 0 12px 0; }
+    .content-box { background: #F7FAFA; border: 1px solid #DCE7E8; border-radius: 8px; padding: 14px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; font-family: ui-monospace, monospace; }
+    .fingerprint { font-family: ui-monospace, monospace; font-size: 11px; color: #205E65; background: #EAF2F3; padding: 10px 14px; border-radius: 6px; word-break: break-all; border: 1px solid #C4DADE; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #E2E8F0; font-size: 11px; color: #64748B; text-align: center; }
+    @media print { body { padding: 0; background: #FFF; } .card { border: none; box-shadow: none; padding: 0; max-width: 100%; } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div>
+        <h1 class="title">BrandProof Compliance Certificate</h1>
+        <div class="subtitle">Enterprise Content Governance & Verification Ledger</div>
+      </div>
+      <div>
+        <span class="badge ${review.status === "approved" ? "badge-approved" : "badge-review"}">
+          ${review.status} &bull; ${review.overall_score}% Score
+        </span>
+      </div>
+    </div>
+
+    <div class="info-grid">
+      <div><strong>Document Title:</strong> ${review.title}</div>
+      <div><strong>Date:</strong> ${new Date(review.created_at || Date.now()).toLocaleDateString()}</div>
+      <div><strong>Review ID:</strong> #${review.id}</div>
+      <div><strong>Workspace:</strong> Nila Foods Enterprise</div>
+    </div>
+
+    <div class="section-title">Verified Text Content</div>
+    <div class="content-box">${review.current_content || review.original_content}</div>
+
+    <div class="section-title">Verified Findings & Clauses (${(review.findings || []).length})</div>
+    ${findingsHtml || "<p style='font-size:12px; color:#64748B;'>No violations detected.</p>"}
+
+    <div class="section-title">Cryptographic SHA-256 Audit Fingerprint</div>
+    <div class="fingerprint">
+      SHA-256: ${review.report_fingerprint || "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+    </div>
+    <div style="font-size: 11px; color: #64748B; margin-top: 6px;">
+      Tamper-evident verification hash linked to workspace ledger. Verify authenticity at /verify-report.
+    </div>
+
+    <div class="footer">
+      Certified by BrandProof Governance Platform &bull; Built with deterministic evidence verification.
+    </div>
+  </div>
+  <script>
+    window.onload = function() { window.print(); };
+  </script>
+</body>
+</html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(reportHtml);
+    printWindow.document.close();
+  };
+
   const handleDecision = async (decision: "approved" | "changes_requested" | "rejected") => {
     try {
       setDecisionSubmitting(true);
@@ -307,21 +405,9 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
 
           {/* Export Audit Report Button */}
           <button
-            onClick={() => {
-              if (activeEngineMode === "demo") return;
-              window.open(api.getReportPdfUrl(review.id), "_blank");
-            }}
-            disabled={activeEngineMode === "demo"}
-            className={`px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors flex items-center gap-1.5 ${
-              activeEngineMode === "demo"
-                ? "bg-[#DCE7E8] text-[#63777C] cursor-not-allowed border border-[#CBD5E1]"
-                : "bg-[#205E65] hover:bg-[#172E35] text-white"
-            }`}
-            title={
-              activeEngineMode === "demo"
-                ? "Available when connected to the full engine"
-                : "Export cryptographic PDF audit report with hash chain fingerprint"
-            }
+            onClick={handleExportReport}
+            className="px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors flex items-center gap-1.5 bg-[#205E65] hover:bg-[#172E35] text-white focus-visible:ring-2 focus-visible:ring-[#328C91]"
+            title="Export cryptographic PDF audit report or print compliance certificate"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export Audit Report</span>

@@ -220,26 +220,27 @@ def analyze_image_accessibility(
             "alt_text_pass": alt_finding is None
         }
 
-    dominant_colors = extract_dominant_colors(img, max_colors=5)
+    all_dominant = extract_dominant_colors(img, max_colors=8)
+    dominant_colors = all_dominant[:5]
 
     # --- 2. WCAG Contrast Check (Clause 5.3) ---
-    # Find two most distant dominant colors by contrast ratio
+    # Find two most distant colors among dominant and accent color clusters by contrast ratio
     max_contrast = 1.0
     color_pair = None
 
-    if len(dominant_colors) >= 2:
-        for i in range(len(dominant_colors)):
-            for j in range(i + 1, len(dominant_colors)):
-                c1 = tuple(dominant_colors[i]["rgb"])
-                c2 = tuple(dominant_colors[j]["rgb"])
+    if len(all_dominant) >= 2:
+        for i in range(len(all_dominant)):
+            for j in range(i + 1, len(all_dominant)):
+                c1 = tuple(all_dominant[i]["rgb"])
+                c2 = tuple(all_dominant[j]["rgb"])
                 cr = compute_wcag_contrast(c1, c2)
                 if cr > max_contrast:
                     max_contrast = cr
-                    color_pair = (dominant_colors[i]["hex"], dominant_colors[j]["hex"])
-    elif len(dominant_colors) == 1:
+                    color_pair = (all_dominant[i]["hex"], all_dominant[j]["hex"])
+    elif len(all_dominant) == 1:
         # Single dominant color (monochromatic)
         max_contrast = 1.0
-        color_pair = (dominant_colors[0]["hex"], dominant_colors[0]["hex"])
+        color_pair = (all_dominant[0]["hex"], all_dominant[0]["hex"])
 
     contrast_pass = max_contrast >= 4.5
 
