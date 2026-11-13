@@ -208,6 +208,39 @@ This document tracks phase-by-phase execution, timestamps, changes, and verifica
   - `python -m pytest tests -q`: 60 passed, 1195 warnings in 38.41s.
   - Frontend static build (`NEXT_EXPORT=true npm run build`): Compiled and exported successfully with 0 errors (4/4 static pages).
 
+---
+
+## [Phase 8] Usability, First-Run Guide & Accessibility
+- **Timestamp**: 2026-11-13 14:37:00 IST
+- **Status**: Completed & Stashed (`phase8-wip`)
+- **Key Changes**:
+  - `frontend/src/components/DashboardView.tsx`: Dismissible 3-minute first-run checklist with progress tracking (`1 of 5 completed`) and localStorage persistence.
+  - `frontend/src/components/Header.tsx`: Role switcher with 1-line visible and tooltip descriptions for Creator, Reviewer, Manager, and Admin.
+  - `frontend/src/components/ReviewDetailView.tsx`: Plain-language tooltips for finding status, severity, and confidence; `aria-live="polite"` on compliance health score; confirmation dialogs for approve and reject actions.
+  - `frontend/src/app/page.tsx`: Resolved horizontal scroll at tablet viewport (768px).
+- **Verification Results**:
+  - Saved to git stash `phase8-wip`. Full backend test suite clean (59 passed).
+
+---
+
+## [Phase 9] Documentation & Verification Suite
+- **Timestamp**: 2026-11-13 18:05:00 IST
+- **Status**: Completed & Verified
+- **Key Changes**:
+  - `README.md`: Honest overview, live link (`https://reshma-kn1805.github.io/BrandProof/`), 3-minute judge evaluation guide, Round 3 improvements, Docker and non-Docker setup, environment variables, test execution commands, and known limitations.
+  - `docs/ARCHITECTURE.md`: Complete system architecture, pipeline flow, verification and privacy engines, SHA-256 tamper-evident hash chain, and hardest problems solved.
+  - `docs/API.md`: Comprehensive REST API documentation summarizing all 40 endpoints exported from the OpenAPI schema (`docs/openapi.json`).
+  - `docs/TESTING.md`: Real test commands and execution counts (59 passed backend tests, 1 Playwright test), scenario coverage table, identified and fixed bugs, and honest limitations.
+  - `docs/ROADMAP.md`: Realistic, ordered post-hackathon roadmap with target audience and effort estimates.
+  - `docs/ROUND3_CHANGELOG.md`: Detailed changelog of all commits since `round2-final` grouped by phase.
+  - `.env.example`: Updated with `CORS_ORIGINS` and complete production/development variables.
+  - Secret scan: Executed regex scan across entire repository history. Zero secret keys or passwords detected.
+- **Verification Results**:
+  - OpenAPI exported cleanly (`docs/openapi.json`).
+  - 59 backend tests passing (`python -m pytest tests -q --ignore=tests/test_playwright_e2e.py`).
+  - Zero secrets found in repository.
+
+
 
 
 
