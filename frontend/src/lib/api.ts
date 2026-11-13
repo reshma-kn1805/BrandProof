@@ -15,7 +15,7 @@ import {
   mockAuditLogs,
 } from "./mockData";
 
-export const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
+export const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "https://brandproof-api-ner0.onrender.com").replace(/\/+$/, "");
 
 export type EngineMode = "connected" | "demo";
 export let activeEngineMode: EngineMode = "connected";
