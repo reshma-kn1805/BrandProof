@@ -54,12 +54,16 @@ python -m pytest tests -q --ignore=tests/test_playwright_e2e.py
 
 ---
 
-## 4. Honest Known Limitations & Current State
+## 4. Honest Known Limitations & Final Imperfections List
 
-1. **Local Browser Test Constraints**:
-   - Playwright end-to-end browser tests and Next.js static builds require headless Chrome subprocesses that encounter timeout overheads on resource-constrained local Windows development environments. These are automated in continuous integration via `.github/workflows/ci.yml`.
-2. **Cloud Free-Tier Backend Cold Starts**:
-   - The deployed backend hosted on Render's free tier spins down after periods of inactivity. The frontend includes an automated health probe (`GET /api/health`) that detects cold sleep, displays a friendly "Waking the server, one moment" message with backoff retries for up to 60 seconds, and gracefully falls back to an offline demo mode with a clear indicator banner if unreachable.
+1. **Free-Tier Backend Cold Starts & Graceful Degradation**:
+   - The cloud backend on Render's free tier spins down into hibernation after 15 minutes of inactivity. When visiting `https://reshma-kn1805.github.io/BrandProof/`, the frontend issues an initial probe to `GET /api/health` with a 6-second timeout.
+   - If the backend is sleeping, the UI shows a friendly "Waking the server, one moment" indicator and retries with backoff for up to 60 seconds. If the backend cannot be reached, the application falls back safely to an offline demo mode with sample data so judges can evaluate all views without seeing raw errors or blank screens.
+2. **Local Browser Test Automation**:
+   - Playwright browser tests and Next.js static builds are configured and run in GitHub Actions CI (`.github/workflows/ci.yml`). On Windows development workstations, local headless Chrome processes can experience subprocess timeouts under heavy concurrent loads.
 3. **Image Contrast Estimation**:
-   - Image contrast analysis calculates contrast between the top two dominant colors in the image palette. While highly accurate for branded banners and badges, complex photographic compositions with intricate backgrounds require human visual confirmation.
+   - The Pillow image analyzer quantizes the dominant background and foreground colors to calculate relative luminance. While accurate for digital banners and text badges, complex photographic scenes with textured gradients require manual verification.
+4. **Offline Demo PDF Generation**:
+   - Cryptographic PDF compliance certificates with SHA-256 fingerprints are generated server-side using ReportLab when connected to the backend. In offline demo mode, the export button is intentionally disabled with an informative tooltip guiding users to the connected environment.
+
 
