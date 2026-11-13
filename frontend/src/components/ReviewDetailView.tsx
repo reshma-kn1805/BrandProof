@@ -286,7 +286,11 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
 
         {/* Right Score Gauge, Export PDF & Decision Actions */}
         <div className="flex items-center gap-3">
-          <div className="text-right">
+          <div
+            className="text-right"
+            aria-live="polite"
+            title="Compliance Health Score: Measured score (0-100%) based on unresolved brand guideline violations and evidence citations."
+          >
             <span className="text-[10px] font-mono text-[#63777C] uppercase block">Compliance Health</span>
             <span
               className={`text-2xl font-bold ${
@@ -666,7 +670,14 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span
-                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                        title={
+                          finding.severity === "critical"
+                            ? "Critical Severity: Must be resolved before document approval"
+                            : finding.severity === "warning"
+                            ? "Warning Severity: Potential brand violation requiring review"
+                            : "Notice Severity: Informative tone and style guidance"
+                        }
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded cursor-help ${
                           finding.severity === "critical"
                             ? "bg-[#FEE2E2] text-[#B91C1C]"
                             : finding.severity === "warning"
@@ -677,9 +688,16 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
                         {finding.severity}
                       </span>
 
-                      {/* Verification Status Badge */}
+                      {/* Verification Status Badge with Plain-Language Tooltip */}
                       <span
-                        className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${
+                        title={
+                          isExpired
+                            ? "Expired Fact: Supporting audit or market data has expired and cannot substantiate claims"
+                            : finding.verification_status === "verified_fact"
+                            ? "Verified Fact: Anchor verified against unexpired registered fact"
+                            : "Verified Clause: Anchor verified against active brand guideline clause"
+                        }
+                        className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold cursor-help ${
                           isExpired
                             ? "bg-[#B91C1C] text-white"
                             : finding.verification_status === "verified_fact"
@@ -692,7 +710,7 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
 
                       {/* AI-Assisted Badge */}
                       {(finding.is_ai_assisted || finding.engine_source === "ai") && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#F3E8FF] text-[#6B21A8] border border-[#E9D5FF] flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#F3E8FF] text-[#6B21A8] border border-[#E9D5FF] flex items-center gap-1 cursor-help" title="Identified with AI-assisted contextual analysis">
                           <Sparkles className="w-3 h-3 text-[#9333EA]" />
                           AI-Assisted
                         </span>
@@ -700,14 +718,14 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
 
                       {/* Pre-Check Withheld Badge */}
                       {(finding.needs_human_look || !finding.suggested_correction) && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] flex items-center gap-1 cursor-help" title="Needs a human look: Candidate rewrite withheld because pre-check detected unbacked numbers or claims">
                           <AlertTriangle className="w-3 h-3 text-[#D97706]" />
                           Needs a human look
                         </span>
                       )}
                     </div>
 
-                    <span className="text-[10px] font-mono text-[#63777C]">
+                    <span className="text-[10px] font-mono text-[#63777C] cursor-help" title="Confidence: Algorithmic certainty calculated by independent Python verification layer">
                       Confidence: {Math.round(finding.confidence * 100)}%
                     </span>
                   </div>
@@ -1075,9 +1093,31 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
               Record Decision:{" "}
               <span className="uppercase text-[#328C91]">{(decisionModal ?? "").replace(/_/g, " ")}</span>
             </h3>
-            <p className="text-xs text-[#63777C]">
-              Provide reviewer notes or publication clearance remarks for the persistent audit trail.
-            </p>
+            {decisionModal === "approved" ? (
+              <div className="p-3 bg-[#DCFCE7] border border-[#86EFAC] rounded text-xs text-[#166534] space-y-1">
+                <span className="font-bold flex items-center gap-1">
+                  <ShieldCheck className="w-4 h-4" />
+                  Confirm Final Brand Approval
+                </span>
+                <p>
+                  Are you sure you want to grant final sign-off? This authorizes publication and records a permanent, tamper-evident entry in the cryptographic audit ledger.
+                </p>
+              </div>
+            ) : decisionModal === "rejected" ? (
+              <div className="p-3 bg-[#FEE2E2] border border-[#FCA5A5] rounded text-xs text-[#991B1B] space-y-1">
+                <span className="font-bold flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  Confirm Submission Rejection
+                </span>
+                <p>
+                  Are you sure you want to reject this submission? The document will be marked as rejected in governance reports.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-[#63777C]">
+                Provide reviewer notes or publication clearance remarks for the persistent audit trail.
+              </p>
+            )}
             <textarea
               rows={3}
               placeholder="Add review notes, audit reference, or change instructions..."
@@ -1088,19 +1128,33 @@ export const ReviewDetailView: React.FC<ReviewDetailViewProps> = ({
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 onClick={() => setDecisionModal(null)}
-                className="px-3 py-1.5 text-xs font-semibold text-[#63777C]"
+                className="px-3 py-1.5 text-xs font-semibold text-[#63777C] hover:text-[#172C32] rounded focus-visible:ring-2 focus-visible:ring-[#328C91]"
               >
                 Cancel
               </button>
               <button
                 disabled={decisionSubmitting}
                 onClick={() => handleDecision(decisionModal)}
-                className="px-4 py-1.5 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                className={`px-4 py-1.5 text-white text-xs font-semibold rounded shadow-sm flex items-center gap-1.5 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[#328C91] ${
+                  decisionModal === "approved"
+                    ? "bg-[#166534] hover:bg-[#14532D]"
+                    : decisionModal === "rejected"
+                    ? "bg-[#B91C1C] hover:bg-[#991B1B]"
+                    : "bg-[#328C91] hover:bg-[#205E65]"
+                }`}
               >
                 {decisionSubmitting ? (
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : null}
-                <span>{decisionSubmitting ? "Recording..." : "Confirm Decision"}</span>
+                <span>
+                  {decisionSubmitting
+                    ? "Recording..."
+                    : decisionModal === "approved"
+                    ? "Confirm Approval"
+                    : decisionModal === "rejected"
+                    ? "Confirm Rejection"
+                    : "Confirm Changes"}
+                </span>
               </button>
             </div>
           </div>

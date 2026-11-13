@@ -363,7 +363,7 @@ export default function Home() {
             onLoadDemoDraft={handleLoadDemoDraft}
           />
 
-          <main className="flex-1 overflow-y-auto">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden">
             {activeView === "dashboard" && (
               <DashboardView
                 onNavigateToReviews={() => handleSetActiveView("reviews")}

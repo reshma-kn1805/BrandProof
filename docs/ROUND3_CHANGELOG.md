@@ -68,3 +68,4 @@ This changelog records all updates, architecture additions, and verification sui
 - **WCAG Contrast Validation**: Color quantization and luminance calculations computing contrast ratios against WCAG 2.1 AA thresholds ($\ge 4.5:1$).
 - **Palette Enforcement**: Delta-E ($\Delta E \le 12.0$) color distance calculations ensuring graphic elements match approved brand colors.
 - **Alt-Text Governance**: Enforces descriptive alternative text on all embedded marketing images.
+

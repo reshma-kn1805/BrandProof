@@ -303,3 +303,4 @@ def analyze_image_accessibility(
         "findings": findings,
         "disclaimer": "Image checks evaluate palette proximity and WCAG contrast. They do not perform optical character recognition. Contrast is estimated from dominant colors unless text/background colors are explicitly picked."
     }
+

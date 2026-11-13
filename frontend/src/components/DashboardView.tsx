@@ -9,6 +9,10 @@ import {
   ArrowRight,
   Sparkles,
   BookOpen,
+  CheckCircle2,
+  X,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { api, DashboardMetrics } from "../lib/api";
 
@@ -29,6 +33,45 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [data, setData] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Phase 8: 3-Minute First-Run Guide
+  const [guideDismissed, setGuideDismissed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("brandproof_guide_dismissed") === "true";
+    }
+    return false;
+  });
+
+  const [completedSteps, setCompletedSteps] = useState<number[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("brandproof_guide_steps");
+        return stored ? JSON.parse(stored) : [1];
+      } catch {
+        return [1];
+      }
+    }
+    return [1];
+  });
+
+  const toggleStep = (stepNum: number) => {
+    setCompletedSteps((prev) => {
+      const next = prev.includes(stepNum)
+        ? prev.filter((s) => s !== stepNum)
+        : [...prev, stepNum];
+      if (typeof window !== "undefined") {
+        localStorage.setItem("brandproof_guide_steps", JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  const handleDismissGuide = () => {
+    setGuideDismissed(true);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("brandproof_guide_dismissed", "true");
+    }
+  };
 
   useEffect(() => {
     loadDashboard();
@@ -82,13 +125,136 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="flex items-center gap-2.5 shrink-0">
           <button
             onClick={onNavigateToNewReview}
-            className="px-4 py-2 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded-md shadow-sm transition-colors flex items-center gap-1.5"
+            className="px-4 py-2 bg-[#328C91] hover:bg-[#205E65] text-white text-xs font-semibold rounded-md shadow-sm transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#328C91]"
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Submit Content for Audit</span>
           </button>
         </div>
       </div>
+
+      {/* Phase 8: 3-Minute First-Run Interactive Checklist */}
+      {!guideDismissed && (
+        <div className="p-5 bg-white border border-[#CBD5E1] rounded-lg shadow-subtle space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 bg-[#EAF2F3] text-[#205E65] rounded-md font-bold">
+                <CheckCircle2 className="w-4 h-4 text-[#328C91]" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-[#0F172A]">
+                  Try the Demo in 3 Minutes
+                </h3>
+                <p className="text-[11px] text-[#475569]">
+                  Follow this guided quick-tour to experience evidence verification, role approvals, and cryptographic audit logs.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-mono font-bold text-[#328C91] bg-[#EAF2F3] px-2.5 py-1 rounded-full">
+                {completedSteps.length} of 5 completed
+              </span>
+              <button
+                type="button"
+                onClick={handleDismissGuide}
+                title="Dismiss checklist"
+                aria-label="Dismiss checklist"
+                className="text-[#64748B] hover:text-[#0F172A] p-1 rounded hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5 pt-1">
+            {[
+              {
+                num: 1,
+                title: "1. Submit Draft",
+                desc: "Paste marketing copy or click a sample preset",
+                action: onNavigateToNewReview,
+                actionLabel: "Submit Copy",
+              },
+              {
+                num: 2,
+                title: "2. Inspect Evidence",
+                desc: "Examine cited clause & accept phrase correction",
+                action: () => data.recent_activity?.[0]?.id ? onSelectReview(data.recent_activity[0].id) : onNavigateToReviews(),
+                actionLabel: "Open Review",
+              },
+              {
+                num: 3,
+                title: "3. Switch to Manager",
+                desc: "Use role dropdown at top right to switch",
+                action: undefined,
+                actionLabel: undefined,
+              },
+              {
+                num: 4,
+                title: "4. Authorize Document",
+                desc: "Final approval by human manager with note",
+                action: onNavigateToReviews,
+                actionLabel: "View Queue",
+              },
+              {
+                num: 5,
+                title: "5. Verify Audit Report",
+                desc: "Inspect SHA-256 tamper-evident fingerprint",
+                action: () => window.location.hash = "#verify_report",
+                actionLabel: "Verify Log",
+              },
+            ].map((step) => {
+              const done = completedSteps.includes(step.num);
+              return (
+                <div
+                  key={step.num}
+                  className={`p-3 rounded-md border text-left flex flex-col justify-between transition-colors ${
+                    done
+                      ? "bg-[#F0FDF4] border-[#BBF7D0]"
+                      : "bg-[#F8FAFC] border-[#E2E8F0] hover:border-[#328C91]"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className={`text-xs font-bold ${done ? "text-[#166534]" : "text-[#0F172A]"}`}>
+                        {step.title}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleStep(step.num)}
+                        aria-label={`Mark step ${step.num} as ${done ? "incomplete" : "complete"}`}
+                        className="text-[#328C91] hover:text-[#205E65]"
+                      >
+                        {done ? (
+                          <CheckSquare className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <Square className="w-4 h-4 text-slate-400" />
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-[#64748B] leading-tight">
+                      {step.desc}
+                    </p>
+                  </div>
+                  {step.action && !done && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        step.action?.();
+                        toggleStep(step.num);
+                      }}
+                      className="mt-2 text-[10px] font-bold text-[#328C91] hover:text-[#205E65] flex items-center gap-1"
+                    >
+                      <span>{step.actionLabel}</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Top Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

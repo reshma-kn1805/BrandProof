@@ -211,15 +211,16 @@ This document tracks phase-by-phase execution, timestamps, changes, and verifica
 ---
 
 ## [Phase 8] Usability, First-Run Guide & Accessibility
-- **Timestamp**: 2026-11-13 14:37:00 IST
-- **Status**: Completed & Stashed (`phase8-wip`)
+- **Timestamp**: 2026-11-13 18:10:00 IST
+- **Status**: Completed & Verified
 - **Key Changes**:
   - `frontend/src/components/DashboardView.tsx`: Dismissible 3-minute first-run checklist with progress tracking (`1 of 5 completed`) and localStorage persistence.
   - `frontend/src/components/Header.tsx`: Role switcher with 1-line visible and tooltip descriptions for Creator, Reviewer, Manager, and Admin.
   - `frontend/src/components/ReviewDetailView.tsx`: Plain-language tooltips for finding status, severity, and confidence; `aria-live="polite"` on compliance health score; confirmation dialogs for approve and reject actions.
   - `frontend/src/app/page.tsx`: Resolved horizontal scroll at tablet viewport (768px).
+  - `tests/test_playwright_judge_journey.py`: Added judge journey smoke test covering 3-minute checklist, role switcher, tooltips, and tablet viewport layout.
 - **Verification Results**:
-  - Saved to git stash `phase8-wip`. Full backend test suite clean (59 passed).
+  - Frontend components integrated and verified. Full backend test suite clean (59 passed).
 
 ---
 

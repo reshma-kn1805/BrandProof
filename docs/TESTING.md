@@ -62,3 +62,4 @@ python -m pytest tests -q --ignore=tests/test_playwright_e2e.py
    - The deployed backend hosted on Render's free tier spins down after periods of inactivity. The frontend includes an automated health probe (`GET /api/health`) that detects cold sleep, displays a friendly "Waking the server, one moment" message with backoff retries for up to 60 seconds, and gracefully falls back to an offline demo mode with a clear indicator banner if unreachable.
 3. **Image Contrast Estimation**:
    - Image contrast analysis calculates contrast between the top two dominant colors in the image palette. While highly accurate for branded banners and badges, complex photographic compositions with intricate backgrounds require human visual confirmation.
+

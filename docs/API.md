@@ -107,3 +107,4 @@ Standard error codes:
 - `RATE_LIMIT_EXCEEDED`: Too many requests submitted in a 60-second window.
 - `INVALID_STATE`: Operation attempted on a review not in the proper workflow state.
 - `NOT_FOUND`: Resource does not exist.
+
